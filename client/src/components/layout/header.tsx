@@ -1,3 +1,4 @@
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -10,6 +11,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Link } from "wouter";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Menu } from "lucide-react";
 
 interface HeaderProps {
   title: string;
@@ -42,79 +46,133 @@ export default function Header({ title, description }: HeaderProps) {
   };
 
   return (
-    <header className="bg-card border-b border-border p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold" data-testid="page-title">{title}</h2>
-          <p className="text-muted-foreground" data-testid="page-description">{description}</p>
-        </div>
-
-        <div className="flex items-center space-x-4">
-          {/* Emergency Stop */}
-          <Button 
-            variant="destructive" 
-            onClick={handleEmergencyStop}
-            data-testid="button-emergency-stop"
-          >
-            <i className="fas fa-stop-circle mr-2"></i>
-            Emergency Stop
-          </Button>
-
-          {/* User Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <div className="flex items-center space-x-3 cursor-pointer hover:bg-muted/50 rounded-lg p-2 transition-colors">
-                <div className="text-right">
-                  <p className="text-sm font-medium" data-testid="user-name">
-                    {user?.username || "Loading..."}
-                  </p>
-                  <p className="text-xs text-muted-foreground" data-testid="user-role">
-                    {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "User"}
-                  </p>
-                </div>
-                <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                  <i className="fas fa-user text-primary-foreground text-sm"></i>
-                </div>
+    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-14 items-center">
+        
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              className="mr-2 px-0 text-base hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 md:hidden"
+            >
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle Menu</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="pr-0">
+            <Link to="/" className="flex items-center">
+              <span className="font-bold">Forex Trading Bot</span>
+            </Link>
+            <div className="my-4 h-[calc(100vh-8rem)] pb-10 pl-6">
+              <div className="flex flex-col space-y-3">
+                <Link to="/dashboard" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Dashboard
+                </Link>
+                <Link to="/strategies" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Strategies
+                </Link>
+                <Link to="/signals" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Signals
+                </Link>
+                <Link to="/risk" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Risk
+                </Link>
+                <Link to="/analytics" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Analytics
+                </Link>
+                <Link to="/backtests" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Backtests
+                </Link>
+                <Link to="/brokers" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Brokers
+                </Link>
+                <Link to="/logs" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Logs
+                </Link>
+                <Link to="/audit" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Audit
+                </Link>
+                <Link to="/telegram" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Telegram
+                </Link>
+                <Link to="/account" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Account
+                </Link>
+                <Link to="/settings" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Settings
+                </Link>
+                <Link to="/support" className="transition-colors hover:text-foreground/80 text-foreground/60">
+                  Support
+                </Link>
               </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user?.username}</p>
-                  <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer">
-                <i className="fas fa-cog mr-2 text-sm"></i>
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
-                <i className="fas fa-user-circle mr-2 text-sm"></i>
-                Account Management
-              </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
-                <i className="fas fa-life-ring mr-2 text-sm"></i>
-                Support
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                className="cursor-pointer text-red-600 focus:text-red-600" 
-                onClick={() => {
-                  logout();
-                  window.location.href = "/";
-                }}
-              >
-                <i className="fas fa-sign-out-alt mr-2 text-sm"></i>
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </div>
+          </SheetContent>
+        </Sheet>
+        <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
+          <div className="w-full flex-1 md:w-auto md:flex-none">
+            {title && (
+              <div className="flex flex-col">
+                <h1 className="text-lg font-semibold">{title}</h1>
+                {description && (
+                  <p className="text-sm text-muted-foreground">{description}</p>
+                )}
+              </div>
+            )}
+          </div>
+          <nav className="flex items-center">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleEmergencyStop}
+              className="mr-4"
+            >
+              Emergency Stop
+            </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+                    <span className="text-sm font-medium text-primary-foreground">
+                      {user?.username?.charAt(0).toUpperCase() || 'U'}
+                    </span>
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">{user?.username || 'User'}</p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      Manage your account, billing, and subscription
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <Link to="/settings">
+                  <DropdownMenuItem>
+                    Settings
+                  </DropdownMenuItem>
+                </Link>
+                <Link to="/account">
+                  <DropdownMenuItem>
+                    Account Management
+                  </DropdownMenuItem>
+                </Link>
+                <Link to="/support">
+                  <DropdownMenuItem>
+                    Support
+                  </DropdownMenuItem>
+                </Link>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={logout}>
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </nav>
         </div>
       </div>
     </header>
   );
 }
-
-// Add default export
-export default Header;

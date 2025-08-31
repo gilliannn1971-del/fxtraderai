@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Header } from "@/components/layout/header";
+import Header from "@/components/layout/header";
 import { Copy, Users, Settings, MessageSquare } from "lucide-react";
 
 interface TelegramStatus {

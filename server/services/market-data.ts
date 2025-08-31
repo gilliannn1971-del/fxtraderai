@@ -43,6 +43,7 @@ class MarketDataService {
         price: mid,
         bid: mid - spread / 2,
         ask: mid + spread / 2,
+        spread,
         timestamp: new Date().toISOString(),
         volume: Math.floor(Math.random() * 1000000) + 100000,
       });
@@ -56,8 +57,8 @@ class MarketDataService {
     this.updateInterval = setInterval(() => {
       if (!this.isRunning) return;
 
+      // Update prices for all symbols
       this.prices.forEach((marketData, symbol) => {
-        // Generate realistic price movements
         const currentPrice = marketData.price;
         const volatility = this.getVolatility(symbol);
         const trend = (Math.random() - 0.5) * 0.1; // Small trend component
@@ -72,10 +73,11 @@ class MarketDataService {
         const spread = this.getSpread(symbol);
 
         const updatedData: MarketData = {
-          ...marketData,
+          symbol,
           price: newPrice,
           bid: newPrice - spread / 2,
           ask: newPrice + spread / 2,
+          spread,
           timestamp: new Date().toISOString(),
           volume: Math.floor(Math.random() * 500000) + 50000,
         };
@@ -156,10 +158,15 @@ class MarketDataService {
     return Array.from(this.prices.values());
   }
 
-  stop(): void {
+  getSymbols(): string[] {
+    return Array.from(this.prices.keys());
+  }
+
+  async stop(): Promise<void> {
     this.isRunning = false;
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
+      this.updateInterval = null;
     }
     console.log("Market Data Service stopped");
   }

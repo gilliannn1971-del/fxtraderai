@@ -32,9 +32,13 @@ export default function Risk() {
     refetchInterval: 2000, // Update every 2 seconds
   });
 
-  const { data: riskEvents } = useQuery<RiskEvent[]>({
+  const { data: riskEventsData, isLoading: eventsLoading } = useQuery({
     queryKey: ["/api/risk/events"],
+    queryFn: () => apiRequest("GET", "/api/risk/events"),
+    refetchInterval: 30000,
   });
+
+  const riskEvents = Array.isArray(riskEventsData) ? riskEventsData : [];
 
   if (isLoading) {
     return (
@@ -57,7 +61,7 @@ export default function Risk() {
   return (
     <>
       <Header title="Risk & Rules" description="Monitor and configure risk management settings" />
-      
+
       <div className="p-6 space-y-6">
         {/* Risk Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -180,7 +184,7 @@ export default function Risk() {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
                     <div>
                       <p className="font-medium">Max Drawdown</p>
@@ -193,7 +197,7 @@ export default function Risk() {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
                     <div>
                       <p className="font-medium">Max Exposure</p>
@@ -224,7 +228,7 @@ export default function Risk() {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
                     <div>
                       <p className="font-medium">Max Lot Size</p>
@@ -237,7 +241,7 @@ export default function Risk() {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
                     <div>
                       <p className="font-medium">Risk Per Trade</p>

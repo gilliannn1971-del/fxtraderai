@@ -20,11 +20,14 @@ class TelegramBotService {
 
   constructor() {
     this.botToken = process.env.TELEGRAM_BOT_TOKEN || null;
-    console.log('Telegram Bot Token:', this.botToken ? 'SET' : 'NOT SET');
-    if (this.botToken) {
+    console.log('🤖 Telegram Bot Token:', this.botToken ? 'SET' : 'NOT SET');
+    if (this.botToken && this.botToken.trim() !== '') {
       this.initializeBot();
     } else {
-      console.log('Telegram bot disabled - no token provided');
+      console.log('🤖 Telegram bot disabled - no token provided or token is empty');
+      console.log('   To enable Telegram bot:');
+      console.log('   1. Get a bot token from @BotFather on Telegram');
+      console.log('   2. Add it to your Secrets as TELEGRAM_BOT_TOKEN');
     }
   }
 

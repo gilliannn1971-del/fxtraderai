@@ -132,25 +132,23 @@ export class StartupService {
 
   private async createDefaultAdmin(): Promise<void> {
     try {
-      const adminUsername = process.env.ADMIN_USERNAME || "admin";
-      const adminEmail = process.env.ADMIN_EMAIL || "admin@tradingbot.com";
-      const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+      console.log("👤 Creating default admin user...");
 
-      const existingAdmin = await db.select().from(users).where(eq(users.username, adminUsername)).limit(1);
+      // Check if admin user already exists
+      const existingAdmin = await db.select()
+        .from(users)
+        .where(eq(users.username, 'admin'))
+        .limit(1);
 
       if (existingAdmin.length === 0) {
-        console.log("👤 Creating default admin user...");
-
-        await authService.register(adminUsername, adminEmail, adminPassword, "admin");
-
-        console.log(`✅ Admin user created: ${adminUsername}`);
-        console.log(`📧 Email: ${adminEmail}`);
-        console.log(`🔑 Password: ${adminPassword}`);
-        console.log("⚠️  Please change the default password after first login!");
+        // Create default admin user
+        await authService.register('admin', 'admin@forex-bot.com', 'admin123', 'admin');
+        console.log("✅ Default admin user created (username: admin, password: admin123)");
+      } else {
+        console.log("✅ Admin user already exists");
       }
     } catch (error) {
-      console.error("Failed to create admin user:", error);
-      throw error;
+      console.error("❌ Failed to create default admin user:", error);
     }
   }
 }
