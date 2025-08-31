@@ -9,8 +9,9 @@ import Risk from "@/pages/risk";
 import Brokers from "@/pages/brokers";
 import Backtests from "@/pages/backtests";
 import Logs from "@/pages/logs";
-import Audit from "@/pages/audit";
-import NotFound from "@/pages/not-found";
+import AuditPage from "./pages/audit";
+import TelegramPage from "./pages/telegram";
+import NotFoundPage from "./pages/not-found";
 import Sidebar from "@/components/layout/sidebar";
 
 function Router() {
@@ -25,8 +26,9 @@ function Router() {
           <Route path="/brokers" component={Brokers} />
           <Route path="/backtests" component={Backtests} />
           <Route path="/logs" component={Logs} />
-          <Route path="/audit" component={Audit} />
-          <Route component={NotFound} />
+          <Route path="/audit" component={AuditPage} />
+          <Route path="/telegram" component={TelegramPage} />
+          <Route component={NotFoundPage} />
         </Switch>
       </main>
     </div>

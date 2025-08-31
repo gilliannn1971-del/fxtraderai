@@ -8,6 +8,7 @@ interface Alert {
   title: string;
   message: string;
   createdAt?: string;
+  timestamp?: string; // Added for compatibility with the change snippet
 }
 
 interface RecentAlertsProps {
@@ -16,7 +17,7 @@ interface RecentAlertsProps {
 
 export default function RecentAlerts({ alerts }: RecentAlertsProps) {
   const getAlertIcon = (level: string) => {
-    switch (level.toLowerCase()) {
+    switch (level?.toLowerCase()) {
       case "critical": return "fas fa-exclamation-triangle text-destructive";
       case "warning": return "fas fa-exclamation-triangle text-warning";
       case "info": default: return "fas fa-info-circle text-primary";
@@ -25,12 +26,12 @@ export default function RecentAlerts({ alerts }: RecentAlertsProps) {
 
   const formatTimeAgo = (dateString?: string) => {
     if (!dateString) return "Unknown";
-    
+
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins} minutes ago`;
     if (diffMins < 1440) return `${Math.floor(diffMins / 60)} hours ago`;
@@ -76,7 +77,7 @@ export default function RecentAlerts({ alerts }: RecentAlertsProps) {
           </Link>
         </div>
       </CardHeader>
-      
+
       <CardContent>
         <div className="space-y-4">
           {displayAlerts.slice(0, 3).map((alert, index) => (

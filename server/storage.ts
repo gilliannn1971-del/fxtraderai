@@ -1,290 +1,374 @@
-import { 
-  users, accounts, strategies, orders, positions, riskEvents, backtests, alerts, systemStatus,
-  type User, type InsertUser, type Account, type InsertAccount, type Strategy, type InsertStrategy,
-  type Order, type InsertOrder, type Position, type InsertPosition, type RiskEvent, type InsertRiskEvent,
-  type Backtest, type InsertBacktest, type Alert, type InsertAlert, type SystemStatus, type InsertSystemStatus
-} from "@shared/schema";
-import { db } from "./db";
-import { eq, desc, and, or } from "drizzle-orm";
-
-export interface IStorage {
-  // Users
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-
-  // Accounts
-  getAccount(id: string): Promise<Account | undefined>;
-  getAccounts(): Promise<Account[]>;
-  createAccount(account: InsertAccount): Promise<Account>;
-  updateAccount(id: string, updates: Partial<InsertAccount>): Promise<Account>;
-
-  // Strategies
-  getStrategy(id: string): Promise<Strategy | undefined>;
-  getStrategies(): Promise<Strategy[]>;
-  createStrategy(strategy: InsertStrategy): Promise<Strategy>;
-  updateStrategy(id: string, updates: Partial<InsertStrategy>): Promise<Strategy>;
-
-  // Orders
-  getOrder(id: string): Promise<Order | undefined>;
-  getOrdersByAccount(accountId: string, limit?: number): Promise<Order[]>;
-  createOrder(order: InsertOrder): Promise<Order>;
-  updateOrder(id: string, updates: Partial<InsertOrder>): Promise<Order>;
-
-  // Positions
-  getPosition(id: string): Promise<Position | undefined>;
-  getOpenPositions(accountId?: string): Promise<Position[]>;
-  createPosition(position: InsertPosition): Promise<Position>;
-  updatePosition(id: string, updates: Partial<InsertPosition>): Promise<Position>;
-
-  // Risk Events
-  getRiskEvents(accountId?: string, limit?: number): Promise<RiskEvent[]>;
-  createRiskEvent(riskEvent: InsertRiskEvent): Promise<RiskEvent>;
-
-  // Backtests
-  getBacktest(id: string): Promise<Backtest | undefined>;
-  getBacktests(strategyId?: string): Promise<Backtest[]>;
-  createBacktest(backtest: InsertBacktest): Promise<Backtest>;
-  updateBacktest(id: string, updates: Partial<InsertBacktest>): Promise<Backtest>;
-
-  // Alerts
-  getAlerts(limit?: number): Promise<Alert[]>;
-  createAlert(alert: InsertAlert): Promise<Alert>;
-  markAlertRead(id: string): Promise<Alert>;
-
-  // System Status
-  getSystemStatus(): Promise<SystemStatus[]>;
-  updateSystemStatus(service: string, status: InsertSystemStatus): Promise<SystemStatus>;
+interface Account {
+  id: string;
+  name: string;
+  balance: string;
+  equity: string;
+  broker: string;
+  status: string;
+  createdAt: string;
 }
 
-export class DatabaseStorage implements IStorage {
-  // Users
-  async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
-  }
+interface Strategy {
+  id: string;
+  name: string;
+  status: string;
+  isEnabled: boolean;
+  symbols: string[];
+  createdAt: string;
+}
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user || undefined;
-  }
+interface Position {
+  id: string;
+  accountId: string;
+  symbol: string;
+  side: string;
+  quantity: string;
+  avgPrice: string;
+  currentPrice: string;
+  unrealizedPnL: string;
+  isOpen: boolean;
+  createdAt: string;
+}
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
-  }
+interface Order {
+  id: string;
+  accountId: string;
+  symbol: string;
+  side: string;
+  quantity: string;
+  price: string;
+  status: string;
+  createdAt: string;
+}
 
-  // Accounts
-  async getAccount(id: string): Promise<Account | undefined> {
-    const [account] = await db.select().from(accounts).where(eq(accounts.id, id));
-    return account || undefined;
-  }
+interface Alert {
+  id: string;
+  level: string;
+  title: string;
+  message: string;
+  source: string;
+  isRead: boolean;
+  createdAt: string;
+  timestamp?: string; // Added for consistency with the change
+}
 
+interface Backtest {
+  id: string;
+  strategyId: string;
+  name: string;
+  status: string;
+  createdAt: string;
+}
+
+interface SystemStatus {
+  service: string;
+  status: string;
+  latency: number;
+  metadata: any;
+  lastUpdate: string;
+}
+
+class MockStorage {
+  private accounts: Account[] = [
+    {
+      id: "acc-1",
+      name: "FTMO Challenge Account",
+      balance: "100000.00",
+      equity: "102450.75",
+      broker: "OANDA",
+      status: "ACTIVE",
+      createdAt: new Date().toISOString()
+    }
+  ];
+
+  private strategies: Strategy[] = [
+    {
+      id: "strat-1",
+      name: "Breakout Strategy",
+      status: "RUNNING",
+      isEnabled: true,
+      symbols: ["EURUSD", "GBPUSD"],
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: "strat-2",
+      name: "Mean Reversion",
+      status: "STOPPED",
+      isEnabled: false,
+      symbols: ["USDJPY"],
+      createdAt: new Date().toISOString()
+    }
+  ];
+
+  private positions: Position[] = [
+    {
+      id: "pos-1",
+      accountId: "acc-1",
+      symbol: "EURUSD",
+      side: "BUY",
+      quantity: "10000",
+      avgPrice: "1.0850",
+      currentPrice: "1.0865",
+      unrealizedPnL: "150.00",
+      isOpen: true,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: "pos-2",
+      accountId: "acc-1",
+      symbol: "GBPUSD",
+      side: "SELL",
+      quantity: "5000",
+      avgPrice: "1.2650",
+      currentPrice: "1.2635",
+      unrealizedPnL: "75.00",
+      isOpen: true,
+      createdAt: new Date().toISOString()
+    }
+  ];
+
+  private orders: Order[] = [
+    {
+      id: "order-1",
+      accountId: "acc-1",
+      symbol: "EURUSD",
+      side: "BUY",
+      quantity: "10000",
+      price: "1.0850",
+      status: "FILLED",
+      createdAt: new Date(Date.now() - 3600000).toISOString()
+    },
+    {
+      id: "order-2",
+      accountId: "acc-1",
+      symbol: "GBPUSD",
+      side: "SELL",
+      quantity: "5000",
+      price: "1.2650",
+      status: "FILLED",
+      createdAt: new Date(Date.now() - 1800000).toISOString()
+    }
+  ];
+
+  private alerts: Alert[] = [
+    {
+      id: "alert-1",
+      level: "WARNING",
+      title: "High Drawdown Alert",
+      message: "Account drawdown approaching 5% limit",
+      source: "RISK_MANAGER",
+      isRead: false,
+      createdAt: new Date(Date.now() - 600000).toISOString()
+    },
+    {
+      id: "alert-2",
+      level: "INFO",
+      title: "Strategy Started",
+      message: "Breakout Strategy has been activated",
+      source: "STRATEGY_ENGINE",
+      isRead: true,
+      createdAt: new Date(Date.now() - 1200000).toISOString()
+    }
+  ];
+
+  private backtests: Backtest[] = [
+    {
+      id: "backtest-1",
+      strategyId: "strat-1",
+      name: "Q4 2023 Backtest",
+      status: "COMPLETED",
+      createdAt: new Date(Date.now() - 86400000).toISOString()
+    }
+  ];
+
+  private systemStatuses: SystemStatus[] = [
+    {
+      service: "strategy-engine",
+      status: "ONLINE",
+      latency: 15,
+      metadata: { activeStrategies: 1, memoryUsage: 45000000 },
+      lastUpdate: new Date().toISOString()
+    },
+    {
+      service: "risk-manager",
+      status: "ONLINE",
+      latency: 8,
+      metadata: { checksPerMinute: 120, blocks: 0 },
+      lastUpdate: new Date().toISOString()
+    },
+    {
+      service: "order-manager",
+      status: "ONLINE",
+      latency: 12,
+      metadata: { pendingOrders: 0 },
+      lastUpdate: new Date().toISOString()
+    },
+    {
+      service: "market-data",
+      status: "ONLINE",
+      latency: 25,
+      metadata: { symbols: 10, lastUpdate: new Date().toISOString() },
+      lastUpdate: new Date().toISOString()
+    }
+  ];
+
+  // Account methods
   async getAccounts(): Promise<Account[]> {
-    return await db.select().from(accounts).orderBy(desc(accounts.createdAt));
+    return this.accounts;
   }
 
-  async createAccount(account: InsertAccount): Promise<Account> {
-    const [newAccount] = await db.insert(accounts).values(account).returning();
-    return newAccount;
+  async createAccount(data: any): Promise<Account> {
+    const account: Account = {
+      id: `acc-${Date.now()}`,
+      name: data.name,
+      balance: data.balance || "0",
+      equity: data.equity || "0",
+      broker: data.broker,
+      status: "ACTIVE",
+      createdAt: new Date().toISOString()
+    };
+    this.accounts.push(account);
+    return account;
   }
 
-  async updateAccount(id: string, updates: Partial<InsertAccount>): Promise<Account> {
-    const [updatedAccount] = await db
-      .update(accounts)
-      .set(updates)
-      .where(eq(accounts.id, id))
-      .returning();
-    return updatedAccount;
-  }
-
-  // Strategies
-  async getStrategy(id: string): Promise<Strategy | undefined> {
-    const [strategy] = await db.select().from(strategies).where(eq(strategies.id, id));
-    return strategy || undefined;
-  }
-
+  // Strategy methods
   async getStrategies(): Promise<Strategy[]> {
-    return await db.select().from(strategies).orderBy(desc(strategies.createdAt));
+    return this.strategies;
   }
 
-  async createStrategy(strategy: InsertStrategy): Promise<Strategy> {
-    const [newStrategy] = await db.insert(strategies).values(strategy).returning();
-    return newStrategy;
+  async createStrategy(data: any): Promise<Strategy> {
+    const strategy: Strategy = {
+      id: `strat-${Date.now()}`,
+      name: data.name,
+      status: "STOPPED",
+      isEnabled: false,
+      symbols: data.symbols || [],
+      createdAt: new Date().toISOString()
+    };
+    this.strategies.push(strategy);
+    return strategy;
   }
 
-  async updateStrategy(id: string, updates: Partial<InsertStrategy>): Promise<Strategy> {
-    const [updatedStrategy] = await db
-      .update(strategies)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(strategies.id, id))
-      .returning();
-    return updatedStrategy;
+  async updateStrategy(id: string, updates: Partial<Strategy>): Promise<Strategy> {
+    const index = this.strategies.findIndex(s => s.id === id);
+    if (index !== -1) {
+      this.strategies[index] = { ...this.strategies[index], ...updates };
+      return this.strategies[index];
+    }
+    throw new Error("Strategy not found");
   }
 
-  // Orders
-  async getOrder(id: string): Promise<Order | undefined> {
-    const [order] = await db.select().from(orders).where(eq(orders.id, id));
-    return order || undefined;
-  }
-
-  async getOrdersByAccount(accountId: string, limit: number = 50): Promise<Order[]> {
-    return await db
-      .select()
-      .from(orders)
-      .where(eq(orders.accountId, accountId))
-      .orderBy(desc(orders.createdAt))
-      .limit(limit);
-  }
-
-  async createOrder(order: InsertOrder): Promise<Order> {
-    const [newOrder] = await db.insert(orders).values(order).returning();
-    return newOrder;
-  }
-
-  async updateOrder(id: string, updates: Partial<InsertOrder>): Promise<Order> {
-    const [updatedOrder] = await db
-      .update(orders)
-      .set(updates)
-      .where(eq(orders.id, id))
-      .returning();
-    return updatedOrder;
-  }
-
-  // Positions
-  async getPosition(id: string): Promise<Position | undefined> {
-    const [position] = await db.select().from(positions).where(eq(positions.id, id));
-    return position || undefined;
-  }
-
+  // Position methods
   async getOpenPositions(accountId?: string): Promise<Position[]> {
-    if (accountId) {
-      return await db
-        .select()
-        .from(positions)
-        .where(and(eq(positions.isOpen, true), eq(positions.accountId, accountId)))
-        .orderBy(desc(positions.createdAt));
+    return this.positions.filter(p => p.isOpen && (!accountId || p.accountId === accountId));
+  }
+
+  async getPosition(id: string): Promise<Position | null> {
+    return this.positions.find(p => p.id === id) || null;
+  }
+
+  async updatePosition(id: string, updates: Partial<Position>): Promise<Position> {
+    const index = this.positions.findIndex(p => p.id === id);
+    if (index !== -1) {
+      this.positions[index] = { ...this.positions[index], ...updates };
+      return this.positions[index];
     }
-    
-    return await db
-      .select()
-      .from(positions)
-      .where(eq(positions.isOpen, true))
-      .orderBy(desc(positions.createdAt));
+    throw new Error("Position not found");
   }
 
-  async createPosition(position: InsertPosition): Promise<Position> {
-    const [newPosition] = await db.insert(positions).values(position).returning();
-    return newPosition;
+  // Order methods
+  async getOrdersByAccount(accountId: string, limit?: number): Promise<Order[]> {
+    const orders = this.orders.filter(o => o.accountId === accountId);
+    return limit ? orders.slice(0, limit) : orders;
   }
 
-  async updatePosition(id: string, updates: Partial<InsertPosition>): Promise<Position> {
-    const [updatedPosition] = await db
-      .update(positions)
-      .set(updates)
-      .where(eq(positions.id, id))
-      .returning();
-    return updatedPosition;
-  }
+  // Alert methods
+  async createAlert(alertData: Omit<Alert, 'id' | 'createdAt' | 'isRead'>): Promise<Alert> {
+    const alert: Alert = {
+      ...alertData,
+      id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
 
-  // Risk Events
-  async getRiskEvents(accountId?: string, limit: number = 50): Promise<RiskEvent[]> {
-    const query = db.select().from(riskEvents);
-    
-    if (accountId) {
-      return await query
-        .where(eq(riskEvents.accountId, accountId))
-        .orderBy(desc(riskEvents.createdAt))
-        .limit(limit);
+    this.alerts.unshift(alert);
+    if (this.alerts.length > 1000) {
+      this.alerts = this.alerts.slice(0, 1000);
     }
-    
-    return await query.orderBy(desc(riskEvents.createdAt)).limit(limit);
-  }
 
-  async createRiskEvent(riskEvent: InsertRiskEvent): Promise<RiskEvent> {
-    const [newRiskEvent] = await db.insert(riskEvents).values(riskEvent).returning();
-    return newRiskEvent;
-  }
-
-  // Backtests
-  async getBacktest(id: string): Promise<Backtest | undefined> {
-    const [backtest] = await db.select().from(backtests).where(eq(backtests.id, id));
-    return backtest || undefined;
-  }
-
-  async getBacktests(strategyId?: string): Promise<Backtest[]> {
-    const query = db.select().from(backtests);
-    
-    if (strategyId) {
-      return await query
-        .where(eq(backtests.strategyId, strategyId))
-        .orderBy(desc(backtests.createdAt));
+    // Send Telegram notification
+    try {
+      const { telegramBot } = await import("./services/telegram-bot");
+      await telegramBot.sendAlert(alert);
+    } catch (error) {
+      console.error("Failed to send Telegram alert:", error);
     }
-    
-    return await query.orderBy(desc(backtests.createdAt));
-  }
 
-  async createBacktest(backtest: InsertBacktest): Promise<Backtest> {
-    const [newBacktest] = await db.insert(backtests).values(backtest).returning();
-    return newBacktest;
-  }
-
-  async updateBacktest(id: string, updates: Partial<InsertBacktest>): Promise<Backtest> {
-    const [updatedBacktest] = await db
-      .update(backtests)
-      .set(updates)
-      .where(eq(backtests.id, id))
-      .returning();
-    return updatedBacktest;
-  }
-
-  // Alerts
-  async getAlerts(limit: number = 50): Promise<Alert[]> {
-    return await db
-      .select()
-      .from(alerts)
-      .orderBy(desc(alerts.createdAt))
-      .limit(limit);
-  }
-
-  async createAlert(alert: InsertAlert): Promise<Alert> {
-    const [newAlert] = await db.insert(alerts).values(alert).returning();
-    return newAlert;
+    return alert;
   }
 
   async markAlertRead(id: string): Promise<Alert> {
-    const [updatedAlert] = await db
-      .update(alerts)
-      .set({ isRead: true })
-      .where(eq(alerts.id, id))
-      .returning();
-    return updatedAlert;
+    const index = this.alerts.findIndex(a => a.id === id);
+    if (index !== -1) {
+      this.alerts[index].isRead = true;
+      return this.alerts[index];
+    }
+    throw new Error("Alert not found");
   }
 
-  // System Status
+  getAllAlerts(): Alert[] {
+    return this.alerts.map(alert => ({
+      id: alert.id || Math.random().toString(36),
+      message: alert.message || 'System alert',
+      level: alert.level || 'info',
+      timestamp: alert.timestamp || new Date().toISOString(),
+      ...alert
+    }));
+  }
+
+  // Backtest methods
+  async getBacktests(strategyId?: string): Promise<Backtest[]> {
+    return strategyId 
+      ? this.backtests.filter(b => b.strategyId === strategyId)
+      : this.backtests;
+  }
+
+  async createBacktest(data: any): Promise<Backtest> {
+    const backtest: Backtest = {
+      id: `backtest-${Date.now()}`,
+      strategyId: data.strategyId,
+      name: data.name,
+      status: "RUNNING",
+      createdAt: new Date().toISOString()
+    };
+    this.backtests.push(backtest);
+    return backtest;
+  }
+
+  // System status methods
   async getSystemStatus(): Promise<SystemStatus[]> {
-    return await db.select().from(systemStatus).orderBy(desc(systemStatus.lastUpdate));
+    return this.systemStatuses;
   }
 
-  async updateSystemStatus(service: string, status: InsertSystemStatus): Promise<SystemStatus> {
-    // Upsert system status
-    const existing = await db.select().from(systemStatus).where(eq(systemStatus.service, service));
-    
-    if (existing.length > 0) {
-      const [updated] = await db
-        .update(systemStatus)
-        .set({ ...status, lastUpdate: new Date() })
-        .where(eq(systemStatus.service, service))
-        .returning();
-      return updated;
+  async updateSystemStatus(service: string, updates: Partial<SystemStatus>): Promise<void> {
+    const index = this.systemStatuses.findIndex(s => s.service === service);
+    if (index !== -1) {
+      this.systemStatuses[index] = { 
+        ...this.systemStatuses[index], 
+        ...updates,
+        lastUpdate: new Date().toISOString()
+      };
     } else {
-      const [created] = await db
-        .insert(systemStatus)
-        .values({ ...status, service, lastUpdate: new Date() })
-        .returning();
-      return created;
+      this.systemStatuses.push({
+        service,
+        status: "UNKNOWN",
+        latency: 0,
+        metadata: {},
+        lastUpdate: new Date().toISOString(),
+        ...updates
+      });
     }
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = new MockStorage();

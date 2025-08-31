@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { useWebSocket } from "@/hooks/use-websocket";
+import { useEffect, useState } from "react";
 import Header from "@/components/layout/header";
 import AccountOverview from "@/components/dashboard/account-overview";
 import RiskStatus from "@/components/dashboard/risk-status";
@@ -7,7 +9,6 @@ import RecentTrades from "@/components/dashboard/recent-trades";
 import OpenPositions from "@/components/dashboard/open-positions";
 import SystemHealth from "@/components/dashboard/system-health";
 import RecentAlerts from "@/components/dashboard/recent-alerts";
-import { useWebSocket } from "@/hooks/use-websocket";
 
 // Define the dashboard data interface
 interface DashboardData {
@@ -61,12 +62,12 @@ export default function Dashboard() {
         title="Dashboard" 
         description="Live trading system overview" 
       />
-      
+
       <div className="p-6 space-y-6">
         <AccountOverview data={dashboardData.account} />
-        
+
         <RiskStatus data={dashboardData.risk} />
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ActiveStrategies 
             strategies={dashboardData.strategies} 
@@ -76,7 +77,7 @@ export default function Dashboard() {
         </div>
 
         <OpenPositions positions={dashboardData.openPositions} />
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <SystemHealth health={dashboardData.systemHealth} />
           <RecentAlerts alerts={dashboardData.alerts} />

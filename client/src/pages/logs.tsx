@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useWebSocket } from "@/hooks/use-websocket";
 import Header from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { type Alert } from "@shared/schema";
 
 export default function Logs() {
@@ -18,13 +19,42 @@ export default function Logs() {
     queryKey: ["/api/alerts"],
   });
 
-  const { data: systemLogs, isLoading: logsLoading } = useQuery({
-    queryKey: ["/api/system/logs", logLevel, timeFilter],
-  });
+  // Removed direct use of systemLogs and tradingLogs from useQuery
+  // Will now rely on WebSocket for real-time updates and fallback to query if needed
 
-  const { data: tradingLogs, isLoading: tradingLoading } = useQuery({
-    queryKey: ["/api/trading/logs", timeFilter],
-  });
+  const { sendMessage, lastMessage } = useWebSocket("ws://localhost:8080"); // Assuming WebSocket server URL
+
+  const [liveSystemLogs, setLiveSystemLogs] = useState<any[]>([]);
+  const [liveTradingLogs, setLiveTradingLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (lastMessage) {
+      try {
+        const message = JSON.parse(lastMessage.data);
+        if (message.type === "LOG_UPDATE") {
+          if (message.payload.service === "system") {
+            setLiveSystemLogs((prevLogs) => [message.payload.log, ...prevLogs].slice(0, 100)); // Keep last 100 logs
+          } else if (message.payload.service === "trading") {
+            setLiveTradingLogs((prevLogs) => [message.payload.log, ...prevLogs].slice(0, 100)); // Keep last 100 logs
+          }
+        } else if (message.type === "ALERT_UPDATE") {
+          // Handle alert updates if necessary, e.g., refresh alerts data
+          // For now, we rely on the query for alerts
+        }
+      } catch (error) {
+        console.error("Failed to parse WebSocket message:", error);
+      }
+    }
+  }, [lastMessage]);
+
+  // Request initial logs from server via WebSocket
+  useEffect(() => {
+    sendMessage({ type: "SUBSCRIBE", payload: { channels: ["logs", "alerts"] } });
+    // Optionally, request historical logs if WebSocket only provides real-time
+    // sendMessage({ type: "GET_LOGS", payload: { type: "system", filter: timeFilter } });
+    // sendMessage({ type: "GET_LOGS", payload: { type: "trading", filter: timeFilter } });
+  }, [sendMessage]);
+
 
   const getAlertIcon = (level: string) => {
     switch (level.toLowerCase()) {
@@ -45,14 +75,14 @@ export default function Logs() {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
     return `${Math.floor(diffMins / 1440)}d ago`;
   };
 
-  // Mock system logs for demonstration
+  // Mock system logs for demonstration - these will be replaced by live logs
   const mockSystemLogs = [
     {
       id: "1",
@@ -80,7 +110,7 @@ export default function Logs() {
     }
   ];
 
-  // Mock trading logs
+  // Mock trading logs - these will be replaced by live logs
   const mockTradingLogs = [
     {
       id: "1",
@@ -108,14 +138,14 @@ export default function Logs() {
     }
   ];
 
-  const filteredSystemLogs = mockSystemLogs.filter(log => {
+  const filteredSystemLogs = (liveSystemLogs.length > 0 ? liveSystemLogs : mockSystemLogs).filter(log => {
     const matchesSearch = log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          log.service.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesLevel = logLevel === "ALL" || log.level === logLevel;
     return matchesSearch && matchesLevel;
   });
 
-  const filteredTradingLogs = mockTradingLogs.filter(log => 
+  const filteredTradingLogs = (liveTradingLogs.length > 0 ? liveTradingLogs : mockTradingLogs).filter(log => 
     log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
     log.symbol.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -123,7 +153,7 @@ export default function Logs() {
   return (
     <>
       <Header title="Logs & Alerts" description="Monitor system activity and alerts" />
-      
+
       <div className="p-6 space-y-6">
         {/* Filters */}
         <Card>

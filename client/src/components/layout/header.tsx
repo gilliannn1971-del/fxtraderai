@@ -7,7 +7,7 @@ interface HeaderProps {
   description: string;
 }
 
-export default function Header({ title, description }: HeaderProps) {
+export function Header({ title, description }: HeaderProps) {
   const { toast } = useToast();
 
   const handleEmergencyStop = async () => {
@@ -38,7 +38,7 @@ export default function Header({ title, description }: HeaderProps) {
           <h2 className="text-2xl font-bold" data-testid="page-title">{title}</h2>
           <p className="text-muted-foreground" data-testid="page-description">{description}</p>
         </div>
-        
+
         <div className="flex items-center space-x-4">
           {/* Emergency Stop */}
           <Button 
@@ -49,7 +49,7 @@ export default function Header({ title, description }: HeaderProps) {
             <i className="fas fa-stop-circle mr-2"></i>
             Emergency Stop
           </Button>
-          
+
           {/* User Menu */}
           <div className="flex items-center space-x-3">
             <div className="text-right">
@@ -65,3 +65,6 @@ export default function Header({ title, description }: HeaderProps) {
     </header>
   );
 }
+
+// Add default export
+export default Header;

@@ -28,10 +28,38 @@ class StrategyEngine {
 
   async startStrategy(strategy: Strategy): Promise<void> {
     await this.loadStrategy(strategy);
+
+    const { logger } = await import("./logger");
+    await logger.logStrategy(
+      strategy.id,
+      `Strategy started: ${strategy.name}`,
+      "INFO",
+      { symbols: strategy.symbols, parameters: strategy.parameters }
+    );
+
     console.log(`Strategy started: ${strategy.name}`);
   }
 
   async stopStrategy(strategy: Strategy): Promise<void> {
+    const { logger } = await import("./logger");
+
+    // Log final performance before stopping
+    const state = this.strategyStates.get(strategy.id);
+    if (state) {
+      await logger.logStrategy(
+        strategy.id,
+        `Strategy stopped: ${strategy.name}`,
+        "INFO",
+        {
+          finalState: {
+            signalsGenerated: state.signalsGenerated || 0,
+            lastSignalTime: state.lastSignalTime,
+            runDuration: Date.now() - (state.startTime || Date.now())
+          }
+        }
+      );
+    }
+
     this.activeStrategies.delete(strategy.id);
     this.strategyStates.delete(strategy.id);
     console.log(`Strategy stopped: ${strategy.name}`);
@@ -39,10 +67,10 @@ class StrategyEngine {
 
   async start(): Promise<void> {
     if (this.isRunning) return;
-    
+
     this.isRunning = true;
     console.log("Strategy Engine started");
-    
+
     // Load enabled strategies
     const strategies = await storage.getStrategies();
     for (const strategy of strategies.filter(s => s.isEnabled)) {
@@ -69,7 +97,7 @@ class StrategyEngine {
             await this.processStrategy(strategy);
           }
         }
-        
+
         // Sleep for 1 second before next iteration
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
@@ -91,7 +119,7 @@ class StrategyEngine {
 
         // Run strategy logic based on type
         const signals = await this.executeStrategyLogic(strategy, symbol, marketData, state);
-        
+
         // Process any generated signals
         for (const signal of signals) {
           await this.processSignal(strategy, signal);
@@ -104,9 +132,9 @@ class StrategyEngine {
   }
 
   private async executeStrategyLogic(
-    strategy: Strategy, 
-    symbol: string, 
-    marketData: any, 
+    strategy: Strategy,
+    symbol: string,
+    marketData: any,
     state: any
   ): Promise<StrategySignal[]> {
     const params = strategy.parameters as any;
@@ -134,22 +162,22 @@ class StrategyEngine {
   }
 
   private async breakoutStrategy(
-    symbol: string, 
-    marketData: any, 
-    params: any, 
+    symbol: string,
+    marketData: any,
+    params: any,
     state: any
   ): Promise<StrategySignal[]> {
     // Simplified breakout strategy logic
     const { donchianPeriod = 20, atrPeriod = 14, riskPercent = 1 } = params;
-    
+
     // This would normally calculate Donchian channels and ATR
     // For now, generate occasional signals based on simple conditions
     const shouldSignal = Math.random() < 0.01; // 1% chance per tick
-    
+
     if (shouldSignal && !state.hasPosition) {
       const side = Math.random() > 0.5 ? "BUY" : "SELL";
       const atr = marketData.price * 0.001; // Mock ATR calculation
-      
+
       return [{
         symbol,
         side,
@@ -164,18 +192,18 @@ class StrategyEngine {
   }
 
   private async meanReversionStrategy(
-    symbol: string, 
-    marketData: any, 
-    params: any, 
+    symbol: string,
+    marketData: any,
+    params: any,
     state: any
   ): Promise<StrategySignal[]> {
     // Simplified mean reversion logic
     const shouldSignal = Math.random() < 0.008; // 0.8% chance per tick
-    
+
     if (shouldSignal && !state.hasPosition) {
       const side = Math.random() > 0.5 ? "SELL" : "BUY"; // Mean reversion typically goes against trend
       const atr = marketData.price * 0.0008;
-      
+
       return [{
         symbol,
         side,
@@ -190,18 +218,18 @@ class StrategyEngine {
   }
 
   private async trendFollowStrategy(
-    symbol: string, 
-    marketData: any, 
-    params: any, 
+    symbol: string,
+    marketData: any,
+    params: any,
     state: any
   ): Promise<StrategySignal[]> {
     // Simplified trend follow logic
     const shouldSignal = Math.random() < 0.006; // 0.6% chance per tick
-    
+
     if (shouldSignal && !state.hasPosition) {
       const side = Math.random() > 0.4 ? "BUY" : "SELL"; // Slight bullish bias
       const atr = marketData.price * 0.0012;
-      
+
       return [{
         symbol,
         side,
@@ -221,16 +249,27 @@ class StrategyEngine {
     const riskAmount = accountBalance * (riskPercent / 100);
     const stopDistance = atr * 2;
     const dollarPerPip = 10; // Simplified for major pairs
-    
+
     return Math.min(0.1, riskAmount / (stopDistance * dollarPerPip));
   }
 
   private async processSignal(strategy: Strategy, signal: StrategySignal): Promise<void> {
     try {
+      // Import risk manager for proper validation
+      const { riskManager } = await import("./risk-manager");
+
       // Check risk constraints before creating order
-      const riskCheck = { approved: true }; // Simplified risk check
+      const riskCheck = await riskManager.validateTrade(signal, strategy);
       if (!riskCheck.approved) {
-        console.log(`Trade rejected by risk manager`);
+        console.log(`Trade rejected by risk manager: ${riskCheck.reason}`);
+
+        // Log the rejection for audit
+        await storage.createAlert({
+          level: "WARNING",
+          title: "Trade Rejected",
+          message: `${strategy.name}: ${riskCheck.reason}`,
+          source: "RISK_MANAGER",
+        });
         return;
       }
 
@@ -250,7 +289,7 @@ class StrategyEngine {
 
       await storage.createOrder(order);
       console.log(`Order submitted: ${signal.side} ${signal.quantity} ${signal.symbol}`);
-      
+
     } catch (error) {
       console.error("Signal processing error:", error);
     }
@@ -269,10 +308,10 @@ class StrategyEngine {
     try {
       console.log(`Starting backtest: ${backtest.name}`);
       await storage.updateBacktest(backtest.id, { status: "RUNNING" });
-      
+
       // Simulate backtest execution
       await new Promise(resolve => setTimeout(resolve, 5000));
-      
+
       // Mock backtest results
       const metrics = {
         totalReturn: 15.6,
@@ -284,11 +323,11 @@ class StrategyEngine {
         avgTrade: 63.25,
       };
 
-      await storage.updateBacktest(backtest.id, { 
+      await storage.updateBacktest(backtest.id, {
         status: "COMPLETED",
         metrics
       });
-      
+
       console.log(`Backtest completed: ${backtest.name}`);
     } catch (error) {
       console.error("Backtest execution error:", error);
@@ -302,7 +341,7 @@ class StrategyEngine {
   }
 
   async getLatency(): Promise<number> {
-    return Math.floor(Math.random() * 50) + 20; // Mock latency 20-70ms
+    return Math.floor(Math.random() * 20) + 5; // Mock latency between 5-25ms
   }
 
   async getActiveStrategyCount(): Promise<number> {

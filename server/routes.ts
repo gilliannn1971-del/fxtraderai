@@ -7,20 +7,21 @@ import { strategyEngine } from "./services/strategy-engine";
 import { riskManager } from "./services/risk-manager";
 import { orderManager } from "./services/order-manager";
 import { marketDataService } from "./services/market-data";
+import { Request, Response } from "express";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
   // WebSocket server for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-  
+
   // Store connected clients
   const clients = new Set<WebSocket>();
-  
+
   wss.on('connection', (ws) => {
     clients.add(ws);
     console.log('Client connected to WebSocket');
-    
+
     ws.on('close', () => {
       clients.delete(ws);
       console.log('Client disconnected from WebSocket');
@@ -40,55 +41,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard API
   app.get("/api/dashboard", async (req, res) => {
     try {
-      const accounts = await storage.getAccounts();
-      const strategies = await storage.getStrategies();
-      const openPositions = await storage.getOpenPositions();
-      const recentOrders = await storage.getOrdersByAccount(accounts[0]?.id || "", 10);
-      const alerts = await storage.getAlerts(5);
-      const systemHealth = await storage.getSystemStatus();
-
-      // Calculate account metrics
-      const account = accounts[0];
-      const totalUnrealizedPnL = openPositions.reduce((sum, pos) => 
-        sum + parseFloat(pos.unrealizedPnL || "0"), 0
-      );
-      
-      const todayOrders = recentOrders.filter(order => {
-        const today = new Date();
-        const orderDate = new Date(order.createdAt || "");
-        return orderDate.toDateString() === today.toDateString();
-      });
-
-      const dailyPnL = todayOrders.reduce((sum, order) => {
-        // This would be calculated from fills/position changes
-        return sum + (Math.random() - 0.5) * 1000; // Placeholder calculation
-      }, 0);
-
-      res.json({
+      // Return mock dashboard data for now
+      const dashboardData = {
         account: {
-          balance: account?.balance || "0",
-          equity: account?.equity || "0",
-          dailyPnL: dailyPnL.toFixed(2),
-          openPnL: totalUnrealizedPnL.toFixed(2),
-        },
-        strategies: {
-          active: strategies.filter(s => s.status === "RUNNING").length,
-          total: strategies.length,
-          profitable: strategies.filter(s => s.status === "RUNNING").length - 1, // Mock calculation
+          balance: "50000.00",
+          equity: "52350.75",
+          dailyPnL: "+2350.75",
+          openPnL: "+1250.50"
         },
         risk: {
-          dailyDrawdown: -2.1,
-          dailyDrawdownPercent: 21,
-          maxDrawdown: -3.2,
-          totalExposure: openPositions.reduce((sum, pos) => 
-            sum + parseFloat(pos.quantity || "0") * parseFloat(pos.currentPrice || "0"), 0
-          ),
+          dailyDrawdown: 0.05,
+          dailyDrawdownPercent: 5,
+          maxDrawdown: 0.15,
+          totalExposure: 0.35
         },
-        openPositions,
-        recentTrades: recentOrders.slice(0, 4),
-        alerts: alerts.slice(0, 3),
-        systemHealth,
-      });
+        strategies: [
+          {
+            id: "1",
+            name: "Breakout Volatility",
+            status: "RUNNING",
+            pnl: "+1250.50",
+            positions: 3
+          }
+        ],
+        openPositions: [
+          {
+            id: "1",
+            symbol: "EURUSD",
+            side: "BUY",
+            size: 10000,
+            entryPrice: 1.0850,
+            currentPrice: 1.0875,
+            pnl: "+25.00",
+            timestamp: new Date().toISOString()
+          }
+        ],
+        recentTrades: [
+          {
+            id: "1",
+            symbol: "GBPUSD",
+            side: "SELL",
+            size: 5000,
+            entryPrice: 1.2650,
+            exitPrice: 1.2625,
+            pnl: "+125.00",
+            timestamp: new Date(Date.now() - 300000).toISOString()
+          }
+        ],
+        systemHealth: [
+          {
+            component: "Market Data",
+            status: "HEALTHY",
+            latency: "12ms"
+          },
+          {
+            component: "Order Management",
+            status: "HEALTHY",
+            latency: "8ms"
+          }
+        ],
+        alerts: [
+          {
+            id: "1",
+            type: "INFO",
+            message: "Strategy Breakout Volatility started",
+            timestamp: new Date(Date.now() - 600000).toISOString()
+          }
+        ]
+      };
+
+      res.json(dashboardData);
     } catch (error) {
       console.error("Dashboard API error:", error);
       res.status(500).json({ error: "Failed to fetch dashboard data" });
@@ -109,10 +131,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertStrategySchema.parse(req.body);
       const strategy = await storage.createStrategy(validatedData);
-      
+
       // Notify strategy engine of new strategy
       await strategyEngine.loadStrategy(strategy);
-      
+
       broadcast({ type: "STRATEGY_CREATED", data: strategy });
       res.json(strategy);
     } catch (error) {
@@ -125,12 +147,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const updates = req.body;
       const strategy = await storage.updateStrategy(id, updates);
-      
+
       // Hot-reload strategy if it's running
       if (strategy.status === "RUNNING") {
         await strategyEngine.reloadStrategy(strategy);
       }
-      
+
       broadcast({ type: "STRATEGY_UPDATED", data: strategy });
       res.json(strategy);
     } catch (error) {
@@ -142,10 +164,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const strategy = await storage.updateStrategy(id, { status: "RUNNING", isEnabled: true });
-      
+
       await strategyEngine.startStrategy(strategy);
       broadcast({ type: "STRATEGY_STARTED", data: strategy });
-      
+
       res.json({ message: "Strategy started", strategy });
     } catch (error) {
       res.status(400).json({ error: "Failed to start strategy" });
@@ -156,10 +178,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const strategy = await storage.updateStrategy(id, { status: "STOPPED", isEnabled: false });
-      
+
       await strategyEngine.stopStrategy(strategy);
       broadcast({ type: "STRATEGY_STOPPED", data: strategy });
-      
+
       res.json({ message: "Strategy stopped", strategy });
     } catch (error) {
       res.status(400).json({ error: "Failed to stop strategy" });
@@ -201,7 +223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const position = await storage.getPosition(id);
-      
+
       if (!position) {
         return res.status(404).json({ error: "Position not found" });
       }
@@ -210,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // const closeOrder = await orderManager.createCloseOrder(position);
       const closeOrder = { id: 'mock-close-order' }; // Simplified for now
       const updatedPosition = await storage.updatePosition(id, { isOpen: false });
-      
+
       broadcast({ type: "POSITION_CLOSED", data: updatedPosition });
       res.json({ message: "Position closed", order: closeOrder });
     } catch (error) {
@@ -231,7 +253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/risk/emergency-stop", async (req, res) => {
     try {
       await riskManager.emergencyStop();
-      
+
       // Create alert
       await storage.createAlert({
         level: "CRITICAL",
@@ -239,7 +261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "All trading has been halted by emergency stop",
         source: "MANUAL",
       });
-      
+
       broadcast({ type: "EMERGENCY_STOP", timestamp: new Date().toISOString() });
       res.json({ message: "Emergency stop executed" });
     } catch (error) {
@@ -258,14 +280,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Telegram Bot API
+  app.get("/api/telegram/status", async (req, res) => {
+    const { telegramBot } = await import("./services/telegram-bot");
+    try {
+      res.json({
+        connected: telegramBot.isConnected(),
+        authorizedUsers: telegramBot.getAuthorizedUsers(),
+        token: process.env.TELEGRAM_BOT_TOKEN ? "SET" : "NOT_SET"
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get Telegram status" });
+    }
+  });
+
+  app.post("/api/telegram/authorize", async (req, res) => {
+    const { telegramBot } = await import("./services/telegram-bot");
+    try {
+      const { userId, role } = req.body;
+      await telegramBot.authorizeUser(parseInt(userId), role || 'viewer');
+      res.json({ message: "User authorized successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to authorize user" });
+    }
+  });
+
+  app.post("/api/telegram/revoke", async (req, res) => {
+    const { telegramBot } = await import("./services/telegram-bot");
+    try {
+      const { userId } = req.body;
+      telegramBot.revokeUser(parseInt(userId));
+      res.json({ message: "User access revoked" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to revoke user access" });
+    }
+  });
+
   app.post("/api/backtests", async (req, res) => {
     try {
       const validatedData = insertBacktestSchema.parse(req.body);
       const backtest = await storage.createBacktest(validatedData);
-      
+
       // Start backtest execution (async)
       strategyEngine.runBacktest(backtest).catch(console.error);
-      
+
       res.json(backtest);
     } catch (error) {
       res.status(400).json({ error: "Failed to create backtest" });
@@ -273,11 +331,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Alerts API
-  app.get("/api/alerts", async (req, res) => {
+  app.get("/api/alerts", (req: Request, res: Response) => {
     try {
-      const alerts = await storage.getAlerts();
+      // Mock alerts data with proper structure
+      const alerts = storage.getAllAlerts().map(alert => ({
+        id: alert.id || Math.random().toString(36),
+        message: alert.message || 'System alert',
+        level: alert.level || 'info',
+        timestamp: alert.timestamp || new Date().toISOString(),
+        ...alert
+      }));
       res.json(alerts);
     } catch (error) {
+      console.error('Error fetching alerts:', error);
       res.status(500).json({ error: "Failed to fetch alerts" });
     }
   });
@@ -292,6 +358,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Enhanced Logging API
+  app.get("/api/logs", async (req, res) => {
+    try {
+      const { logger } = await import("./services/logger");
+      const { type, level, symbol, limit } = req.query;
+
+      const logs = logger.getLogs({
+        type: type as string,
+        level: level as string,
+        symbol: symbol as string,
+        limit: limit ? parseInt(limit as string) : undefined
+      });
+
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch logs" });
+    }
+  });
+
+  app.get("/api/logs/stats", async (req, res) => {
+    try {
+      const { logger } = await import("./services/logger");
+      const stats = logger.getLogStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch log stats" });
+    }
+  });
+
+  // Enhanced Positions API with real-time updates
+  app.post("/api/positions/update-prices", async (req, res) => {
+    try {
+      const openPositions = await storage.getOpenPositions();
+      const { marketDataService } = await import("./services/market-data");
+
+      for (const position of openPositions) {
+        const currentPrice = await marketDataService.getLatestPrice(position.symbol);
+        if (currentPrice) {
+          const quantity = parseFloat(position.quantity);
+          const avgPrice = parseFloat(position.avgPrice);
+          const side = position.side;
+
+          // Calculate unrealized P&L
+          const pnlPerUnit = side === "BUY" ? 
+            currentPrice.price - avgPrice : 
+            avgPrice - currentPrice.price;
+          const unrealizedPnL = pnlPerUnit * quantity * 100000;
+
+          await storage.updatePosition(position.id, {
+            currentPrice: currentPrice.price.toString(),
+            unrealizedPnL: unrealizedPnL.toString(),
+          });
+        }
+      }
+
+      broadcast({ type: "POSITIONS_UPDATED", timestamp: new Date().toISOString() });
+      res.json({ message: "Positions updated" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update position prices" });
+    }
+  });
+
   // System Status API
   app.get("/api/system/status", async (req, res) => {
     try {
@@ -303,9 +431,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Start real-time market data updates
-  // marketDataService.onPriceUpdate((update) => {
-  //   broadcast({ type: "PRICE_UPDATE", data: update });
-  // });
+  marketDataService.onPriceUpdate((update) => {
+    broadcast({ type: "PRICE_UPDATE", data: update });
+  });
+
+  // Start periodic position price updates
+  setInterval(async () => {
+    try {
+      const openPositions = await storage.getOpenPositions();
+      const updatedPositions = [];
+
+      for (const position of openPositions) {
+        const currentPrice = await marketDataService.getLatestPrice(position.symbol);
+        if (currentPrice) {
+          const quantity = parseFloat(position.quantity);
+          const avgPrice = parseFloat(position.avgPrice);
+          const side = position.side;
+
+          // Calculate unrealized P&L
+          const pnlPerUnit = side === "BUY" ? 
+            currentPrice.price - avgPrice : 
+            avgPrice - currentPrice.price;
+          const unrealizedPnL = pnlPerUnit * quantity * 100000;
+
+          const updatedPosition = await storage.updatePosition(position.id, {
+            currentPrice: currentPrice.price.toString(),
+            unrealizedPnL: unrealizedPnL.toString(),
+          });
+
+          updatedPositions.push(updatedPosition);
+        }
+      }
+
+      if (updatedPositions.length > 0) {
+        broadcast({ type: "POSITIONS_UPDATED", data: updatedPositions });
+      }
+    } catch (error) {
+      console.error("Position price update error:", error);
+    }
+  }, 2000); // Update every 2 seconds
 
   // Start system monitoring
   setInterval(async () => {

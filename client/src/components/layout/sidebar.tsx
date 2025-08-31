@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { BarChart3, Shield, FileText, Settings, TrendingUp, AlertCircle, Database, Target, MessageSquare } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: "fas fa-chart-line" },
@@ -27,15 +28,15 @@ export default function Sidebar() {
           </div>
         </div>
       </div>
-      
+
       <nav className="p-4 space-y-2">
         {navigation.map((item) => {
           const isActive = location === item.href;
           return (
             <Link key={item.href} href={item.href}>
-              <a
+              <div
                 className={cn(
-                  "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors",
+                  "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors cursor-pointer",
                   isActive
                     ? "bg-primary text-primary-foreground"
                     : "hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -44,10 +45,16 @@ export default function Sidebar() {
               >
                 <i className={`${item.icon} w-5`}></i>
                 <span>{item.name}</span>
-              </a>
+              </div>
             </Link>
           );
         })}
+        <Link href="/telegram">
+            <div className="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-accent transition-colors cursor-pointer">
+              <MessageSquare className="h-5 w-5" />
+              <span>Telegram Bot</span>
+            </div>
+          </Link>
       </nav>
 
       <div className="absolute bottom-4 left-4 right-4">
