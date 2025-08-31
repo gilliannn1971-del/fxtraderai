@@ -10,12 +10,15 @@ import { marketDataService } from "./services/market-data";
 import { Request, Response } from "express";
 import { authService } from "./services/auth";
 import { authenticateToken, requireRole } from "./middleware/auth";
+import { mt5Integration } from "./services/mt5-integration";
+import { aiTradingEngine } from "./services/ai-trading-engine";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
   // Import services
   const { telegramBot } = await import("./services/telegram-bot");
+  const { notificationManager } = await import("./services/notification-manager");
 
   // WebSocket server for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
@@ -27,10 +30,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     clients.add(ws);
     console.log('Client connected to WebSocket');
 
+    ws.on('message', (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+
+        if (message.type === 'CHAT_MESSAGE') {
+          // Broadcast chat message to all connected clients (support staff)
+          broadcast({
+            type: 'CHAT_MESSAGE',
+            data: message.data
+          });
+
+          // Store chat message in memory (in a real app, store in database)
+          console.log('Chat message:', message.data);
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    });
+
     ws.on('close', () => {
       clients.delete(ws);
       console.log('Client disconnected from WebSocket');
     });
+
+    // Send connection status
+    ws.send(JSON.stringify({
+      type: 'CHAT_STATUS',
+      data: { connected: true }
+    }));
   });
 
   // Broadcast function for real-time updates
@@ -47,7 +75,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/register", async (req, res) => {
     try {
       const { username, email, password, role } = req.body;
-      
+
       if (!username || !email || !password) {
         return res.status(400).json({ error: "Username, email, and password are required" });
       }
@@ -66,13 +94,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { username, password } = req.body;
-      
+
       if (!username || !password) {
         return res.status(400).json({ error: "Username and password are required" });
       }
 
+      // Temporary admin login
+      if (username === "admin" && password === "admin") {
+        const adminUser = {
+          id: "admin-user",
+          username: "admin",
+          email: "admin@forexbot.com",
+          role: "admin",
+        };
+
+        const token = "admin-token-" + Date.now();
+
+        return res.json({
+          user: adminUser,
+          token,
+        });
+      }
+
       const result = await authService.login(username, password);
-      
+
       if (!result) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
@@ -105,12 +150,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/dashboard", authenticateToken, async (req, res) => {
     try {
       console.log('Dashboard API called for user:', req.user?.id);
-      
+
       // Get user-specific data
       const userAccounts = await storage.getAccounts(req.user!.id);
       const userStrategies = await storage.getStrategies(req.user!.id);
       const userPositions = await storage.getOpenPositions(undefined, req.user!.id);
-      
+
       // Return user-specific dashboard data
       const dashboardData = {
         account: {
@@ -240,10 +285,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const strategy = await storage.updateStrategy(id, { status: "RUNNING", isEnabled: true });
 
       await strategyEngine.startStrategy(strategy);
+      await notificationManager.sendStrategyAlert(strategy.name, "STARTED", { id });
       broadcast({ type: "STRATEGY_STARTED", data: strategy });
 
       res.json({ message: "Strategy started", strategy });
     } catch (error) {
+      await notificationManager.sendAlert("ERROR", `Failed to start strategy: ${error.message}`);
       res.status(400).json({ error: "Failed to start strategy" });
     }
   });
@@ -254,10 +301,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const strategy = await storage.updateStrategy(id, { status: "STOPPED", isEnabled: false });
 
       await strategyEngine.stopStrategy(strategy);
+      await notificationManager.sendStrategyAlert(strategy.name, "STOPPED", { id });
       broadcast({ type: "STRATEGY_STOPPED", data: strategy });
 
       res.json({ message: "Strategy stopped", strategy });
     } catch (error) {
+      await notificationManager.sendAlert("ERROR", `Failed to stop strategy: ${error.message}`);
       res.status(400).json({ error: "Failed to stop strategy" });
     }
   });
@@ -266,7 +315,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/accounts", async (req, res) => {
     try {
       const accounts = await storage.getAccounts();
-      
+
       // Ensure accounts have all required fields for the brokers page
       const formattedAccounts = accounts.map(account => ({
         ...account,
@@ -278,7 +327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         baseCurrency: account.baseCurrency || 'USD',
         isActive: account.isActive !== undefined ? account.isActive : true
       }));
-      
+
       res.json(formattedAccounts);
     } catch (error) {
       console.error("Failed to fetch accounts:", error);
@@ -328,7 +377,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           balance: "--"
         }
       ];
-      
+
       res.json(brokerConnections);
     } catch (error) {
       console.error("Failed to fetch broker connections:", error);
@@ -339,10 +388,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/brokers/test-connection/:index", async (req, res) => {
     try {
       const { index } = req.params;
-      
+
       // Simulate connection test
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       res.json({ 
         success: true, 
         message: "Connection test successful",
@@ -356,10 +405,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/brokers/reconnect/:index", async (req, res) => {
     try {
       const { index } = req.params;
-      
+
       // Simulate reconnection
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       res.json({ 
         success: true, 
         message: "Reconnection successful"
@@ -394,9 +443,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const closeOrder = { id: 'mock-close-order' }; // Simplified for now
       const updatedPosition = await storage.updatePosition(id, { isOpen: false });
 
+      await notificationManager.sendTradeNotification("CLOSE", position.symbol, {
+        size: position.quantity,
+        price: position.currentPrice,
+        pnl: position.unrealizedPnL
+      });
+
       broadcast({ type: "POSITION_CLOSED", data: updatedPosition });
       res.json({ message: "Position closed", order: closeOrder });
     } catch (error) {
+      await notificationManager.sendAlert("ERROR", `Failed to close position: ${error.message}`);
       res.status(400).json({ error: "Failed to close position" });
     }
   });
@@ -451,17 +507,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       await riskManager.emergencyStop();
 
-      // Create alert
-      await storage.createAlert({
-        level: "CRITICAL",
-        title: "Emergency Stop Triggered",
-        message: "All trading has been halted by emergency stop",
-        source: "MANUAL",
-      });
+      // Send critical notification
+      await notificationManager.sendAlert("CRITICAL", "Emergency Stop Triggered - All trading has been halted");
 
       broadcast({ type: "EMERGENCY_STOP", timestamp: new Date().toISOString() });
       res.json({ message: "Emergency stop executed" });
     } catch (error) {
+      await notificationManager.sendAlert("ERROR", `Failed to execute emergency stop: ${error.message}`);
       res.status(500).json({ error: "Failed to execute emergency stop" });
     }
   });
@@ -690,36 +742,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Store support tickets in memory for now
+  const supportTickets: any[] = [
+    {
+      id: "ticket_001",
+      subject: "Trading API Connection Issues",
+      description: "Having trouble connecting to the OANDA API. Getting timeout errors.",
+      status: "IN_PROGRESS",
+      priority: "HIGH",
+      category: "technical",
+      userId: "user-1",
+      createdAt: "2024-01-15T10:00:00Z",
+      updatedAt: "2024-01-16T14:30:00Z",
+      responses: [
+        {
+          id: "resp_001",
+          message: "Thank you for contacting support. We're investigating this issue.",
+          isStaff: true,
+          createdAt: "2024-01-15T11:00:00Z",
+        },
+        {
+          id: "resp_002",
+          message: "Could you please provide your API credentials for testing?",
+          isStaff: true,
+          createdAt: "2024-01-16T14:30:00Z",
+        },
+      ],
+    },
+  ];
+
   // Support API
   app.get("/api/support/tickets", authenticateToken, async (req, res) => {
     try {
-      const tickets = [
-        {
-          id: "ticket_001",
-          subject: "Trading API Connection Issues",
-          description: "Having trouble connecting to the OANDA API. Getting timeout errors.",
-          status: "IN_PROGRESS",
-          priority: "HIGH",
-          category: "technical",
-          createdAt: "2024-01-15T10:00:00Z",
-          updatedAt: "2024-01-16T14:30:00Z",
-          responses: [
-            {
-              id: "resp_001",
-              message: "Thank you for contacting support. We're investigating this issue.",
-              isStaff: true,
-              createdAt: "2024-01-15T11:00:00Z",
-            },
-            {
-              id: "resp_002",
-              message: "Could you please provide your API credentials for testing?",
-              isStaff: true,
-              createdAt: "2024-01-16T14:30:00Z",
-            },
-          ],
-        },
-      ];
-      res.json(tickets);
+      // If admin, show all tickets, otherwise show only user's tickets
+      let userTickets = supportTickets;
+      if (req.user?.role !== "admin") {
+        userTickets = supportTickets.filter(ticket => ticket.userId === req.user?.id);
+      }
+      res.json(userTickets);
     } catch (error) {
       console.error('Support tickets error:', error);
       res.status(500).json({ error: "Failed to fetch support tickets" });
@@ -736,14 +796,182 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "OPEN",
         priority,
         category,
+        userId: req.user?.id,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         responses: [],
       };
+
+      // Store the ticket
+      supportTickets.push(ticket);
+
       res.json(ticket);
     } catch (error) {
       console.error('Ticket creation error:', error);
       res.status(500).json({ error: "Failed to create support ticket" });
+    }
+  });
+
+  // Admin User Management API
+  app.get("/api/admin/users", authenticateToken, requireRole(["admin"]), async (req, res) => {
+    try {
+      // Mock user data - in real implementation, fetch from database
+      const users = [
+        {
+          id: "admin-user",
+          username: "admin",
+          email: "admin@forexbot.com",
+          role: "admin",
+          status: "active",
+          lastLogin: new Date().toISOString(),
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+        {
+          id: "user-1",
+          username: "trader1",
+          email: "trader1@example.com",
+          role: "user",
+          status: "active",
+          lastLogin: new Date(Date.now() - 3600000).toISOString(),
+          createdAt: "2024-01-15T00:00:00Z",
+        },
+      ];
+      res.json(users);
+    } catch (error) {
+      console.error('Admin users fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", authenticateToken, requireRole(["admin"]), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      // In real implementation, update user in database
+      res.json({ message: "User updated successfully", userId: id, updates });
+    } catch (error) {
+      console.error('User update error:', error);
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  // Admin System Health API
+  app.get("/api/admin/system-health", authenticateToken, requireRole(["admin"]), async (req, res) => {
+    try {
+      const systemHealth = [
+        {
+          service: "API Server",
+          status: "healthy",
+          uptime: "99.9%",
+          cpuUsage: Math.floor(Math.random() * 60) + 20,
+          memoryUsage: Math.floor(Math.random() * 40) + 40,
+          responseTime: Math.floor(Math.random() * 30) + 10 + "ms",
+        },
+        {
+          service: "Database",
+          status: "healthy",
+          uptime: "99.8%",
+          cpuUsage: Math.floor(Math.random() * 40) + 20,
+          memoryUsage: Math.floor(Math.random() * 50) + 30,
+          responseTime: Math.floor(Math.random() * 15) + 5 + "ms",
+        },
+        {
+          service: "WebSocket Server",
+          status: "healthy",
+          uptime: "99.9%",
+          cpuUsage: Math.floor(Math.random() * 30) + 10,
+          memoryUsage: Math.floor(Math.random() * 40) + 20,
+          responseTime: Math.floor(Math.random() * 10) + 3 + "ms",
+        },
+        {
+          service: "Market Data Feed",
+          status: Math.random() > 0.8 ? "warning" : "healthy",
+          uptime: "98.5%",
+          cpuUsage: Math.floor(Math.random() * 30) + 50,
+          memoryUsage: Math.floor(Math.random() * 20) + 70,
+          responseTime: Math.floor(Math.random() * 40) + 20 + "ms",
+        },
+        {
+          service: "Strategy Engine",
+          status: "healthy",
+          uptime: "99.7%",
+          cpuUsage: Math.floor(Math.random() * 40) + 20,
+          memoryUsage: Math.floor(Math.random() * 30) + 40,
+          responseTime: Math.floor(Math.random() * 20) + 8 + "ms",
+        },
+      ];
+      res.json(systemHealth);
+    } catch (error) {
+      console.error('System health error:', error);
+      res.status(500).json({ error: "Failed to fetch system health" });
+    }
+  });
+
+  // Admin Analytics API
+  app.get("/api/admin/analytics", authenticateToken, requireRole(["admin"]), async (req, res) => {
+    try {
+      const analytics = {
+        totalUsers: 156 + Math.floor(Math.random() * 10),
+        activeUsers: 89 + Math.floor(Math.random() * 5),
+        totalTrades: 12456 + Math.floor(Math.random() * 100),
+        systemUptime: "99.8%",
+        errorRate: Math.random() * 0.5,
+      };
+      res.json(analytics);
+    } catch (error) {
+      console.error('Admin analytics error:', error);
+      res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  });
+
+  // Admin API for managing support tickets
+  app.patch("/api/support/tickets/:id", authenticateToken, requireRole(["admin"]), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+
+      const ticketIndex = supportTickets.findIndex(ticket => ticket.id === id);
+      if (ticketIndex === -1) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+
+      supportTickets[ticketIndex] = {
+        ...supportTickets[ticketIndex],
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+
+      res.json(supportTickets[ticketIndex]);
+    } catch (error) {
+      console.error('Ticket update error:', error);
+      res.status(500).json({ error: "Failed to update ticket" });
+    }
+  });
+
+  app.post("/api/support/tickets/:id/respond", authenticateToken, requireRole(["admin"]), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { message } = req.body;
+
+      const ticketIndex = supportTickets.findIndex(ticket => ticket.id === id);
+      if (ticketIndex === -1) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+
+      const response = {
+        id: "resp_" + Date.now(),
+        message,
+        isStaff: true,
+        createdAt: new Date().toISOString(),
+      };
+
+      supportTickets[ticketIndex].responses.push(response);
+      supportTickets[ticketIndex].updatedAt = new Date().toISOString();
+
+      res.json(response);
+    } catch (error) {
+      console.error('Ticket response error:', error);
+      res.status(500).json({ error: "Failed to add ticket response" });
     }
   });
 
@@ -804,7 +1032,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
 
       let filteredArticles = articles;
-      
+
       if (search) {
         const searchLower = search.toString().toLowerCase();
         filteredArticles = filteredArticles.filter(article =>
@@ -813,7 +1041,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           article.tags.some(tag => tag.toLowerCase().includes(searchLower))
         );
       }
-      
+
       if (category && category !== "all") {
         filteredArticles = filteredArticles.filter(article => article.category === category);
       }
@@ -822,6 +1050,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Knowledge base error:', error);
       res.status(500).json({ error: "Failed to fetch knowledge base articles" });
+    }
+  });
+
+  // Notification Management API
+  app.get("/api/notifications/rules", authenticateToken, async (req, res) => {
+    try {
+      const rules = notificationManager.getRules();
+      res.json(rules);
+    } catch (error) {
+      console.error('Failed to fetch notification rules:', error);
+      res.status(500).json({ error: "Failed to fetch notification rules" });
+    }
+  });
+
+  app.patch("/api/notifications/rules/:ruleId", authenticateToken, async (req, res) => {
+    try {
+      const { ruleId } = req.params;
+      const updates = req.body;
+      notificationManager.updateRule(ruleId, updates);
+      res.json({ message: "Notification rule updated successfully" });
+    } catch (error) {
+      console.error('Failed to update notification rule:', error);
+      res.status(500).json({ error: "Failed to update notification rule" });
+    }
+  });
+
+  app.post("/api/notifications/test", authenticateToken, async (req, res) => {
+    try {
+      const { type, message } = req.body;
+      await notificationManager.sendNotification(type || 'alerts', message || 'Test notification', {}, 'INFO');
+      res.json({ message: "Test notification sent" });
+    } catch (error) {
+      console.error('Failed to send test notification:', error);
+      res.status(500).json({ error: "Failed to send test notification" });
     }
   });
 
@@ -905,7 +1167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createdAt: new Date(Date.now() - 60 * 60000).toISOString()
         }
       ];
-      
+
       res.json(mockAlerts);
     } catch (error) {
       console.error('Error fetching alerts:', error);
@@ -927,7 +1189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/analytics/performance", async (req, res) => {
     try {
       const { timeframe = "30d", account = "all" } = req.query;
-      
+
       // Mock performance data
       const performanceData = {
         equity: Array.from({ length: 30 }, (_, i) => ({
@@ -966,7 +1228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           valueAtRisk: 2340
         }
       };
-      
+
       res.json(performanceData);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch performance data" });
@@ -1064,13 +1326,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { providerId } = req.params;
       const { enabled } = req.body;
       const { signalEngine } = await import("./services/signal-engine");
-      
+
       if (enabled) {
         signalEngine.enableProvider(providerId);
       } else {
         signalEngine.disableProvider(providerId);
       }
-      
+
       res.json({ success: true });
     } catch (error) {
       res.status(400).json({ error: "Failed to toggle provider" });
@@ -1095,10 +1357,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const backtest = await storage.getBacktest(id);
       const strategy = await storage.getStrategy(backtest.strategyId);
-      
+
       const { backtestingEngine } = await import("./services/backtesting-engine");
       backtestingEngine.runBacktest(backtest, strategy).catch(console.error);
-      
+
       res.json({ message: "Backtest started" });
     } catch (error) {
       res.status(400).json({ error: "Failed to run backtest" });
@@ -1181,7 +1443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/audit/:period", async (req, res) => {
     try {
       const { period } = req.params;
-      
+
       // Mock audit data
       const auditData = [
         {
@@ -1212,7 +1474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ip: "127.0.0.1"
         }
       ];
-      
+
       res.json(auditData);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch audit data" });
@@ -1236,6 +1498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const quantity = parseFloat(position.quantity);
           const avgPrice = parseFloat(position.avgPrice);
           const side = position.side;
+          const previousPnL = parseFloat(position.unrealizedPnL);
 
           // Calculate unrealized P&L
           const pnlPerUnit = side === "BUY" ? 
@@ -1247,6 +1510,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             currentPrice: currentPrice.price.toString(),
             unrealizedPnL: unrealizedPnL.toString(),
           });
+
+          // Send notification for significant P&L changes
+          const pnlChange = Math.abs(unrealizedPnL - previousPnL);
+          if (pnlChange > 1000) { // Notify for changes > $1000
+            const changeDirection = unrealizedPnL > previousPnL ? "📈 PROFIT" : "📉 LOSS";
+            await notificationManager.sendAlert("INFO", 
+              `${changeDirection}: ${position.symbol} P&L changed by $${pnlChange.toFixed(2)} (Total: $${unrealizedPnL.toFixed(2)})`,
+              position.symbol
+            );
+          }
 
           updatedPositions.push(updatedPosition);
         }

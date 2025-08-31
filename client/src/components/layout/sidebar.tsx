@@ -173,6 +173,17 @@ const Sidebar = () => {
           <span>Support</span>
         </div>
       </Link>
+      {user?.role === "admin" && (
+        <Link href="/admin">
+          <div className={cn(
+            "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors cursor-pointer",
+            location === "/admin" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground hover:text-foreground"
+          )}>
+            <Shield className="h-5 w-5" />
+            <span>Admin Panel</span>
+          </div>
+        </Link>
+      )}
     </>
   );
 

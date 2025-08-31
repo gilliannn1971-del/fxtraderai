@@ -9,6 +9,7 @@ import RecentTrades from "@/components/dashboard/recent-trades";
 import OpenPositions from "@/components/dashboard/open-positions";
 import SystemHealth from "@/components/dashboard/system-health";
 import RecentAlerts from "@/components/dashboard/recent-alerts";
+import { AITradingStatus } from "@/components/dashboard/ai-trading-status";
 
 // Define the dashboard data interface
 interface DashboardData {
@@ -24,6 +25,11 @@ interface DashboardData {
   recentTrades: any[];
   systemHealth: any[];
   alerts: any[];
+  aiTradingStatus?: { // Assuming AI trading status might be part of the dashboard data
+    status: string;
+    lastTrade: string;
+    profit: string;
+  };
 }
 
 export default function Dashboard() {
@@ -90,9 +96,8 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           <AccountOverview account={safeData?.account} />
           <RiskStatus risk={safeData?.risk} />
-          <div className="sm:col-span-2">
-            <SystemHealth health={safeData?.systemHealth} />
-          </div>
+          <SystemHealth health={safeData?.systemHealth} />
+          <AITradingStatus aiStatus={safeData?.aiTradingStatus} />
         </div>
 
         {/* Middle Row */}

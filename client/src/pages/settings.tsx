@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { Upload, Save, Eye, EyeOff, Bell, Shield, User, Palette } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 interface UserSettings {
   profile: {
@@ -70,13 +70,23 @@ export default function Settings() {
   const { data: settings, isLoading } = useQuery<UserSettings>({
     queryKey: ["/api/user/settings"],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/user/settings");
-      return response;
+      const token = localStorage.getItem("auth_token");
+      const response = await fetch("/api/user/settings", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) throw new Error("Failed to fetch settings");
+      return response.json();
     },
   });
 
-  const [formData, setFormData] = useState<UserSettings>(
-    settings || {
+  const [formData, setFormData] = useState<UserSettings>(() => {
+    // Initialize with localStorage values or defaults
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    const savedCurrency = localStorage.getItem('currency') || 'USD';
+
+    return settings || {
       profile: {
         username: user?.username || "",
         email: user?.email || "",
@@ -87,8 +97,8 @@ export default function Settings() {
         profilePicture: "",
       },
       preferences: {
-        theme: "dark",
-        currency: "USD",
+        theme: savedTheme,
+        currency: savedCurrency,
         dateFormat: "YYYY-MM-DD",
         timeFormat: "24h",
         dashboardRefreshRate: 5,
@@ -110,12 +120,43 @@ export default function Settings() {
         loginAlerts: true,
         ipWhitelist: [],
       },
+    };
+  });
+
+  // Update formData when settings are loaded from server
+  useEffect(() => {
+    if (settings) {
+      const savedTheme = localStorage.getItem('theme') || settings.preferences.theme;
+      const savedCurrency = localStorage.getItem('currency') || settings.preferences.currency;
+
+      setFormData({
+        ...settings,
+        preferences: {
+          ...settings.preferences,
+          theme: savedTheme,
+          currency: savedCurrency,
+        }
+      });
     }
-  );
+  }, [settings]);
 
   const updateSettingsMutation = useMutation({
-    mutationFn: async (data: Partial<UserSettings>) => {
-      return apiRequest("PUT", "/api/user/settings", data);
+    mutationFn: async (settings: UserSettings) => {
+      const token = localStorage.getItem("auth_token");
+      const response = await fetch("/api/user/settings", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(settings),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update settings");
+      }
+
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -134,8 +175,22 @@ export default function Settings() {
   });
 
   const changePasswordMutation = useMutation({
-    mutationFn: async (data: typeof passwordForm) => {
-      return apiRequest("PUT", "/api/user/password", data);
+    mutationFn: async (passwordData: typeof passwordForm) => {
+      const token = localStorage.getItem("auth_token");
+      const response = await fetch("/api/user/password", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(passwordData),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to change password");
+      }
+
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -157,7 +212,7 @@ export default function Settings() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("profilePicture", file);
-      
+
       const response = await fetch("/api/user/profile-picture", {
         method: "POST",
         headers: {
@@ -205,7 +260,7 @@ export default function Settings() {
         });
         return;
       }
-      
+
       if (!file.type.startsWith("image/")) {
         toast({
           title: "Invalid File Type",
@@ -223,6 +278,49 @@ export default function Settings() {
       reader.readAsDataURL(file);
     }
   };
+
+  // Apply theme changes immediately
+  useEffect(() => {
+    const root = window.document.documentElement;
+
+    if (formData.preferences.theme === 'dark') {
+      root.classList.add('dark');
+    } else if (formData.preferences.theme === 'light') {
+      root.classList.remove('dark');
+    } else {
+      // System theme
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = (e: MediaQueryListEvent) => {
+        if (e.matches) {
+          root.classList.add('dark');
+        } else {
+          root.classList.remove('dark');
+        }
+      };
+
+      mediaQuery.addEventListener('change', handleChange);
+      if (mediaQuery.matches) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+
+      // Cleanup listener when component unmounts or theme changes
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+
+    // Store theme preference
+    localStorage.setItem('theme', formData.preferences.theme);
+  }, [formData.preferences.theme]);
+
+  // Apply currency changes - store for global use
+  useEffect(() => {
+    localStorage.setItem('currency', formData.preferences.currency);
+    // Dispatch custom event for other components to listen to
+    window.dispatchEvent(new CustomEvent('currencyChanged', { 
+      detail: { currency: formData.preferences.currency } 
+    }));
+  }, [formData.preferences.currency]);
 
   const handleSaveSettings = () => {
     updateSettingsMutation.mutate(formData);
@@ -251,7 +349,7 @@ export default function Settings() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="Settings" description="Manage your account settings and preferences" />
-      
+
       <div className="container mx-auto p-6">
         <Tabs defaultValue="profile" className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
@@ -737,7 +835,7 @@ export default function Settings() {
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Market News</Label>
-                      <p className="text-sm text-muted-foreground">Economic calendar and market news updates</p>
+                      <p className="text-sm text-muted-foreground">Updates on market events and news</p>
                     </div>
                     <Switch
                       checked={formData.notifications.marketNews}
@@ -746,6 +844,44 @@ export default function Settings() {
                         notifications: { ...prev.notifications, marketNews: checked }
                       }))}
                     />
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium">Notification Testing</h4>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            const response = await fetch("/api/notifications/test", {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${localStorage.getItem('auth_token')}`
+                              },
+                              body: JSON.stringify({
+                                type: "alerts",
+                                message: "Test notification from settings page"
+                              })
+                            });
+
+                            if (response.ok) {
+                              alert("Test notification sent! Check your Telegram if connected.");
+                            } else {
+                              alert("Failed to send test notification");
+                            }
+                          } catch (error) {
+                            console.error("Failed to send test notification:", error);
+                            alert("Failed to send test notification");
+                          }
+                        }}
+                      >
+                        Send Test Notification
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>

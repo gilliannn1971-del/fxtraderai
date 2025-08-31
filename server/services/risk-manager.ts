@@ -1,5 +1,6 @@
 import { Account, Strategy, RiskEvent, InsertRiskEvent } from "@shared/schema";
 import { storage } from "../storage";
+import { notificationManager } from "./notification-manager";
 
 interface RiskCheckResult {
   approved: boolean;
@@ -99,10 +100,13 @@ class RiskManager {
       }
     }
 
-    const dailyLossLimit = account.propRules ? 
+    const dailyLossLimit = account.propRules ?
       (account.propRules as any).dailyLossLimit || 5000 : 5000;
 
     if (Math.abs(dailyPnL) >= dailyLossLimit && dailyPnL < 0) {
+      await notificationManager.sendRiskWarning(
+        `Daily loss limit exceeded: $${Math.abs(dailyPnL).toFixed(2)} > $${dailyLossLimit.toFixed(2)}`
+      );
       return { approved: false, reason: `Daily loss limit of $${dailyLossLimit} reached` };
     }
 
@@ -114,10 +118,13 @@ class RiskManager {
     const balance = parseFloat(account.balance || "0");
     const drawdownPercent = ((balance - currentEquity) / balance) * 100;
 
-    const maxDrawdownLimit = account.propRules ? 
+    const maxDrawdownLimit = account.propRules ?
       (account.propRules as any).maxDrawdownLimit || 15 : 15;
 
     if (drawdownPercent >= maxDrawdownLimit) {
+      await notificationManager.sendRiskWarning(
+        `Max drawdown limit reached: ${drawdownPercent.toFixed(2)}% > ${maxDrawdownLimit}%`
+      );
       return { approved: false, reason: `Max drawdown limit of ${maxDrawdownLimit}% reached` };
     }
 
@@ -126,10 +133,13 @@ class RiskManager {
 
   private async checkPositionLimits(account: Account, signal: any): Promise<RiskCheckResult> {
     const openPositions = await storage.getOpenPositions(account.id);
-    const maxPositions = account.propRules ? 
+    const maxPositions = account.propRules ?
       (account.propRules as any).maxPositions || 10 : 10;
 
     if (openPositions.length >= maxPositions) {
+      await notificationManager.sendRiskWarning(
+        `Maximum position limit reached: ${openPositions.length} >= ${maxPositions}`
+      );
       return { approved: false, reason: `Maximum position limit of ${maxPositions} reached` };
     }
 
@@ -150,10 +160,13 @@ class RiskManager {
     const proposedExposure = signal.quantity * (signal.price || 1.0);
     const newTotalExposure = totalExposure + proposedExposure;
 
-    const maxExposure = account.propRules ? 
+    const maxExposure = account.propRules ?
       (account.propRules as any).maxExposure || 75000 : 75000;
 
     if (newTotalExposure > maxExposure) {
+      await notificationManager.sendRiskWarning(
+        `Total exposure limit would be exceeded: $${newTotalExposure.toFixed(2)} > $${maxExposure.toFixed(2)}`
+      );
       return { approved: false, reason: `Total exposure limit of $${maxExposure} would be exceeded` };
     }
 
@@ -161,10 +174,10 @@ class RiskManager {
   }
 
   private async logRiskEvent(
-    accountId: string, 
-    strategyId: string | null, 
+    accountId: string,
+    strategyId: string | null,
     level: "INFO" | "WARNING" | "CRITICAL",
-    rule: string, 
+    rule: string,
     action: string
   ): Promise<void> {
     const riskEvent: InsertRiskEvent = {
@@ -215,12 +228,27 @@ class RiskManager {
   }
 
   async emergencyStop(): Promise<void> {
-    this.isEmergencyStop = true;
-    console.log("EMERGENCY STOP ACTIVATED - All trading halted");
+    console.log("🚨 EMERGENCY STOP TRIGGERED");
+    this.emergencyStopActive = true;
 
-    // Here you would stop all strategies, close positions, etc.
-    const { strategyEngine } = await import("./strategy-engine");
-    await strategyEngine.stopAll();
+    // Send immediate notification
+    await notificationManager.sendAlert("CRITICAL",
+      "Emergency stop triggered - all trading halted immediately"
+    );
+
+    // Close all open positions
+    const openPositions = await storage.getOpenPositions();
+    for (const position of openPositions) {
+      await storage.updatePosition(position.id, { isOpen: false });
+    }
+
+    // Log emergency stop
+    await storage.createAlert({
+      level: "CRITICAL",
+      title: "Emergency Stop",
+      message: "Emergency stop triggered - all trading halted",
+      source: "RISK_MANAGER",
+    });
   }
 
   isHealthy(): boolean {

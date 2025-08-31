@@ -85,32 +85,36 @@ export default function AccountManagement() {
   const queryClient = useQueryClient();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  const { data: accountInfo } = useQuery<AccountInfo>({
+  const { data: accountInfo, error: accountError } = useQuery<AccountInfo>({
     queryKey: ["/api/account/info"],
     queryFn: async () => {
       return apiRequest("GET", "/api/account/info");
     },
+    retry: 1,
   });
 
-  const { data: subscription } = useQuery<Subscription>({
+  const { data: subscription, error: subscriptionError } = useQuery<Subscription>({
     queryKey: ["/api/account/subscription"],
     queryFn: async () => {
       return apiRequest("GET", "/api/account/subscription");
     },
+    retry: 1,
   });
 
-  const { data: invoices } = useQuery<Invoice[]>({
+  const { data: invoices, error: invoicesError } = useQuery<Invoice[]>({
     queryKey: ["/api/account/invoices"],
     queryFn: async () => {
       return apiRequest("GET", "/api/account/invoices");
     },
+    retry: 1,
   });
 
-  const { data: usageStats } = useQuery<UsageStats>({
+  const { data: usageStats, error: usageError } = useQuery<UsageStats>({
     queryKey: ["/api/account/usage"],
     queryFn: async () => {
       return apiRequest("GET", "/api/account/usage");
     },
+    retry: 1,
   });
 
   const cancelSubscriptionMutation = useMutation({

@@ -1,27 +1,29 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { useWebSocket } from "@/hooks/use-websocket";
+import { LiveChat } from "./components/support/live-chat";
+import Sidebar from "@/components/layout/sidebar";
 import Dashboard from "@/pages/dashboard";
 import Strategies from "@/pages/strategies";
 import Risk from "@/pages/risk";
-import Brokers from "@/pages/brokers";
 import Backtests from "@/pages/backtests";
+import Analytics from "@/pages/analytics";
 import Logs from "@/pages/logs";
-import AuditPage from "./pages/audit";
-import TelegramPage from "./pages/telegram";
-import Analytics from "./pages/analytics";
-import Signals from "@/pages/signals";
-import NotFoundPage from "./pages/not-found";
-import Sidebar from "@/components/layout/sidebar";
-import { ErrorBoundary } from "react-error-boundary";
-import { AuthProvider, useAuth } from "@/hooks/use-auth";
-import Login from "@/pages/login";
-import Settings from "./pages/settings";
 import AccountManagement from "./pages/account-management";
 import Support from "./pages/support";
+import AdminPanel from "./pages/admin";
+import Login from "./pages/login";
+import Settings from "./pages/settings";
+import Signals from "./pages/signals";
+import Brokers from "./pages/brokers";
+import Telegram from "./pages/telegram";
+import Audit from "./pages/audit";
+import NotFound from "./pages/not-found";
 
 function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
   return (
@@ -40,54 +42,77 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
   );
 }
 
-function Router() {
-  return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-auto pt-16 md:pt-0">
-        <Switch>
-          <Route path="/" component={Dashboard} />
-          <Route path="/strategies" component={Strategies} />
-          <Route path="/risk" component={Risk} />
-          <Route path="/brokers" component={Brokers} />
-          <Route path="/backtests" component={Backtests} />
-          <Route path="/logs" component={Logs} />
-          <Route path="/audit" component={AuditPage} />
-          <Route path="/telegram" component={TelegramPage} />
-          <Route path="/analytics" component={Analytics} />
-          <Route path="/signals" component={Signals} />
-          <Route path="/settings" component={Settings} />
-          <Route path="/account" component={AccountManagement} />
-          <Route path="/support" component={Support} />
-          <Route component={NotFoundPage} />
-        </Switch>
-      </main>
-    </div>
-  );
-}
 
 function AuthenticatedApp() {
-  const { user, isLoading } = useAuth();
+  const { user } = useAuth();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  // Initialize WebSocket connection
+  useWebSocket();
 
   if (!user) {
     return <Login />;
   }
 
-  return <Router />;
+  return (
+    <div className="flex min-h-screen bg-background">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
+          <Switch>
+            <Route path="/" component={Dashboard} />
+            <Route path="/strategies" component={Strategies} />
+            <Route path="/signals" component={Signals} />
+            <Route path="/risk" component={Risk} />
+            <Route path="/backtests" component={Backtests} />
+            <Route path="/analytics" component={Analytics} />
+            <Route path="/logs" component={Logs} />
+            <Route path="/brokers" component={Brokers} />
+            <Route path="/telegram" component={Telegram} />
+            <Route path="/audit" component={Audit} />
+            <Route path="/account" component={AccountManagement} />
+            <Route path="/settings" component={Settings} />
+            <Route path="/support" component={Support} />
+            <Route path="/admin" component={AdminPanel} />
+            <Route component={NotFound} />
+          </Switch>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function App() {
+  // Initialize theme on app load
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    const root = window.document.documentElement;
+
+    if (savedTheme === 'dark') {
+      root.classList.add('dark');
+    } else if (savedTheme === 'light') {
+      root.classList.remove('dark');
+    } else {
+      // System theme
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = (e: MediaQueryListEvent) => {
+        if (e.matches) {
+          root.classList.add('dark');
+        } else {
+          root.classList.remove('dark');
+        }
+      };
+
+      mediaQuery.addEventListener('change', handleChange);
+      if (mediaQuery.matches) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+  }, []);
+
   return (
     <ErrorBoundary
       FallbackComponent={ErrorFallback}
@@ -98,9 +123,10 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <AuthProvider>
-            <div className="dark min-h-screen bg-background text-foreground">
+            <div className="min-h-screen bg-background text-foreground">
               <Toaster />
               <AuthenticatedApp />
+              <LiveChat />
             </div>
           </AuthProvider>
         </TooltipProvider>

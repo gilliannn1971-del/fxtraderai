@@ -1,5 +1,6 @@
 import { Strategy, Position, InsertOrder, Backtest } from "@shared/schema";
 import { storage } from "../storage";
+import { notificationManager } from "./notification-manager";
 
 interface StrategySignal {
   symbol: string;

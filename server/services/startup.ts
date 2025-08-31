@@ -3,6 +3,12 @@ import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { authService } from "./auth";
 import { sql } from "drizzle-orm";
+import { marketDataService } from "./market-data";
+import { strategyEngine } from "./strategy-engine";
+import { performanceTracker } from "./performance-tracker";
+import { telegramBot } from "./telegram-bot";
+import { mt5Integration } from "./mt5-integration";
+import { aiTradingEngine } from "./ai-trading-engine";
 
 export class StartupService {
   async initialize(): Promise<void> {
@@ -149,6 +155,28 @@ export class StartupService {
       }
     } catch (error) {
       console.error("❌ Failed to create default admin user:", error);
+    }
+  }
+
+  async startServices(): Promise<void> {
+    // Start all services
+    await marketDataService.start();
+    await strategyEngine.start();
+    await performanceTracker.start();
+    await telegramBot.start();
+
+    // Initialize MT5 integration
+    const mt5Connected = await mt5Integration.initialize();
+    if (mt5Connected) {
+      console.log("✅ MT5 integration initialized");
+
+      // Initialize AI trading engine
+      const aiInitialized = await aiTradingEngine.initialize();
+      if (aiInitialized) {
+        console.log("✅ AI Trading Engine ready");
+      }
+    } else {
+      console.log("⚠️ MT5 integration failed - using mock data");
     }
   }
 }
