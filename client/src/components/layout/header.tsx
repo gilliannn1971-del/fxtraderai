@@ -108,31 +108,20 @@ export default function Header({ title, description }: HeaderProps) {
             </div>
           </SheetContent>
         </Sheet>
-        <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-          <div className="w-full flex-1 md:w-auto md:flex-none">
-            {title && (
-              <div className="flex flex-col">
-                <h1 className="text-lg font-semibold">{title}</h1>
-                {description && (
-                  <p className="text-sm text-muted-foreground">{description}</p>
-                )}
-              </div>
-            )}
-          </div>
-          <nav className="flex items-center">
+        <div className="flex flex-1 items-center justify-end space-x-4">
+          <nav className="flex items-center space-x-4">
             <Button
               variant="destructive"
               size="sm"
               onClick={handleEmergencyStop}
-              className="mr-4"
             >
               Emergency Stop
             </Button>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+                <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0">
+                  <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center">
                     <span className="text-sm font-medium text-primary-foreground">
                       {user?.username?.charAt(0).toUpperCase() || 'U'}
                     </span>

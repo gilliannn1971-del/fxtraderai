@@ -33,7 +33,7 @@ export default function Risk() {
   });
 
   const { data: riskEventsData, isLoading: eventsLoading } = useQuery({
-    queryKey: ["/api/risk/events"],
+    queryKey: ["risk-events"],
     queryFn: () => apiRequest("GET", "/api/risk/events"),
     refetchInterval: 30000,
   });

@@ -411,6 +411,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/risk/events", async (req, res) => {
+    try {
+      // Mock risk events data
+      const riskEvents = [
+        {
+          id: "risk-evt-1",
+          level: "WARNING",
+          rule: "Daily Loss Limit",
+          action: "Position Size Reduced",
+          details: { 
+            threshold: 5000, 
+            current: 3500,
+            percentage: 70 
+          },
+          createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+        },
+        {
+          id: "risk-evt-2",
+          level: "INFO",
+          rule: "Maximum Drawdown",
+          action: "Alert Triggered",
+          details: { 
+            threshold: 15, 
+            current: 8.5,
+            percentage: 56.7 
+          },
+          createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+        }
+      ];
+      res.json(riskEvents);
+    } catch (error) {
+      console.error("Failed to fetch risk events:", error);
+      res.status(500).json({ error: "Failed to fetch risk events" });
+    }
+  });
+
   app.post("/api/risk/emergency-stop", async (req, res) => {
     try {
       await riskManager.emergencyStop();
@@ -992,27 +1028,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/signals/:symbol", async (req, res) => {
-    try {
-      const { symbol } = req.params;
-      const { signalEngine } = await import("./services/signal-engine");
-      const signals = signalEngine.getSignalsForSymbol(symbol);
-      const consensus = signalEngine.getConsensusSignal(symbol);
-      res.json({ signals, consensus });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch symbol signals" });
-    }
-  });
-
   app.get("/api/signals/providers", async (req, res) => {
     try {
-      const { signalEngine } = await import("./services/signal-engine");
-      const providers = signalEngine.getProviders();
-      res.json(providers);
-    } catch (error) {
-      console.error("Failed to fetch signal providers:", error);
-      // Return mock providers if service fails
-      res.json([
+      console.log("GET /api/signals/providers called");
+      const providers = [
         {
           id: "technical-analysis",
           name: "Technical Analysis",
@@ -1031,7 +1050,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           description: "Machine learning based price prediction",
           enabled: true
         }
-      ]);
+      ];
+      console.log("Returning providers:", providers);
+      res.json(providers);
+    } catch (error) {
+      console.error("Failed to fetch signal providers:", error);
+      res.status(500).json({ error: "Failed to fetch signal providers" });
     }
   });
 
@@ -1050,6 +1074,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(400).json({ error: "Failed to toggle provider" });
+    }
+  });
+
+  app.get("/api/signals/:symbol", async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const { signalEngine } = await import("./services/signal-engine");
+      const signals = signalEngine.getSignalsForSymbol(symbol);
+      const consensus = signalEngine.getConsensusSignal(symbol);
+      res.json({ signals, consensus });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch symbol signals" });
     }
   });
 

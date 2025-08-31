@@ -79,10 +79,10 @@ export default function Dashboard() {
   }
 
   return (
-    <>
+    <div className="min-h-screen bg-background">
       <Header 
-        title="Dashboard" 
-        description="Live trading system overview" 
+        title="" 
+        description="" 
       />
 
       <div className="p-4 md:p-6 space-y-4 md:space-y-6">
@@ -107,6 +107,6 @@ export default function Dashboard() {
           <RecentAlerts alerts={safeData?.alerts} />
         </div>
       </div>
-    </>
+    </div>
   );
 }

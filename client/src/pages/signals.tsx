@@ -1,6 +1,5 @@
-
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowUp, ArrowDown, TrendingUp, Brain, BarChart3, Zap } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 
 interface TradingSignal {
   id: string;
@@ -29,73 +29,52 @@ interface SignalProvider {
   enabled: boolean;
 }
 
+interface SymbolSignalsData {
+  signals: TradingSignal[];
+  consensus: {
+    side: "BUY" | "SELL";
+    strength: number;
+    confidence: number;
+    reasoning: string;
+  };
+}
+
 export default function Signals() {
   const [selectedSymbol, setSelectedSymbol] = useState("all");
+  const queryClient = useQueryClient();
 
   const { data: signals, isLoading: signalsLoading } = useQuery<TradingSignal[]>({
-    queryKey: ["/api/signals"],
-    queryFn: async () => {
-      const response = await fetch("/api/signals");
-      if (!response.ok) throw new Error("Failed to fetch signals");
-      return response.json();
-    },
+    queryKey: ["signals"],
+    queryFn: () => apiRequest("GET", "/api/signals"),
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   const { data: providers, isLoading: providersLoading } = useQuery<SignalProvider[]>({
-    queryKey: ["/api/signals/providers"],
-    queryFn: async () => {
-      const response = await fetch("/api/signals/providers");
-      if (!response.ok) {
-        // Return mock providers if API fails
-        return [
-          {
-            id: "technical-analysis",
-            name: "Technical Analysis",
-            description: "RSI, MACD, Bollinger Bands, and trend analysis",
-            enabled: true
-          },
-          {
-            id: "sentiment-analysis",
-            name: "Market Sentiment",
-            description: "News sentiment and market positioning analysis",
-            enabled: true
-          },
-          {
-            id: "ml-prediction",
-            name: "ML Price Prediction",
-            description: "Machine learning based price prediction",
-            enabled: true
-          }
-        ];
-      }
-      return response.json();
-    },
+    queryKey: ["signal-providers"],
+    queryFn: () => apiRequest("GET", "/api/signals/providers"),
   });
 
-  const { data: symbolSignals } = useQuery({
-    queryKey: ["/api/signals", selectedSymbol],
+  const { data: symbolSignals, isLoading: symbolSignalsLoading } = useQuery<SymbolSignalsData>({
+    queryKey: ["signals", selectedSymbol],
     queryFn: async () => {
       if (selectedSymbol === "all") return null;
-      const response = await fetch(`/api/signals/${selectedSymbol}`);
-      if (!response.ok) throw new Error("Failed to fetch symbol signals");
-      return response.json();
+      return apiRequest("GET", `/api/signals/${selectedSymbol}`);
     },
     enabled: selectedSymbol !== "all",
   });
 
-  const toggleProvider = async (providerId: string, enabled: boolean) => {
-    try {
-      await fetch(`/api/signals/providers/${providerId}/toggle`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled }),
-      });
-      // Refresh providers data
-      window.location.reload();
-    } catch (error) {
-      console.error("Failed to toggle provider:", error);
-    }
+  const toggleProviderMutation = useMutation({
+    mutationFn: async ({ providerId, enabled }: { providerId: string; enabled: boolean }) => {
+      return apiRequest("POST", `/api/signals/providers/${providerId}/toggle`, { enabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["signal-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["signals"] });
+    },
+  });
+
+  const toggleProvider = (providerId: string, enabled: boolean) => {
+    toggleProviderMutation.mutate({ providerId, enabled });
   };
 
   const getSignalIcon = (source: string) => {
@@ -117,9 +96,18 @@ export default function Signals() {
     return new Date(timestamp).toLocaleTimeString();
   };
 
-  const uniqueSymbols = [...new Set(signals?.map(s => s.symbol) || [])];
+  const uniqueSymbols = [...new Set((signals || []).map(s => s.symbol))];
 
-  if (signalsLoading || providersLoading) return <div>Loading signals...</div>;
+  if (signalsLoading || providersLoading || symbolSignalsLoading) {
+    return (
+      <div className="p-4 md:p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>Loading signals...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
@@ -127,7 +115,7 @@ export default function Signals() {
         <h1 className="text-2xl md:text-3xl font-bold">Trading Signals</h1>
         <Select value={selectedSymbol} onValueChange={setSelectedSymbol}>
           <SelectTrigger className="w-full sm:w-48">
-            <SelectValue />
+            <SelectValue placeholder="All Symbols"/>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Symbols</SelectItem>
@@ -147,7 +135,7 @@ export default function Signals() {
 
         <TabsContent value="active" className="space-y-6">
           <div className="grid gap-4">
-            {signals?.length === 0 ? (
+            {!signals || signals.length === 0 ? (
               <Card>
                 <CardContent className="p-6 text-center">
                   <p className="text-muted-foreground">No active signals found</p>
@@ -182,7 +170,7 @@ export default function Signals() {
                         <p className="text-sm text-muted-foreground">Strength</p>
                         <div className="flex items-center gap-2">
                           <div className="flex-1 bg-muted rounded-full h-2">
-                            <div 
+                            <div
                               className={`h-full rounded-full ${getStrengthColor(signal.strength)}`}
                               style={{ width: `${signal.strength}%` }}
                             />
@@ -194,7 +182,7 @@ export default function Signals() {
                         <p className="text-sm text-muted-foreground">Confidence</p>
                         <div className="flex items-center gap-2">
                           <div className="flex-1 bg-muted rounded-full h-2">
-                            <div 
+                            <div
                               className="h-full rounded-full bg-blue-500"
                               style={{ width: `${signal.confidence}%` }}
                             />
@@ -220,7 +208,7 @@ export default function Signals() {
 
         <TabsContent value="providers" className="space-y-6">
           <div className="grid gap-4">
-            {providers?.map((provider) => (
+            {providers && Array.isArray(providers) && providers.length > 0 ? providers.map((provider) => (
               <Card key={provider.id}>
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
@@ -228,7 +216,7 @@ export default function Signals() {
                       <CardTitle className="text-lg">{provider.name}</CardTitle>
                       <p className="text-sm text-muted-foreground mt-1">{provider.description}</p>
                     </div>
-                    <Switch 
+                    <Switch
                       checked={provider.enabled}
                       onCheckedChange={(enabled) => toggleProvider(provider.id, enabled)}
                     />
@@ -245,7 +233,13 @@ export default function Signals() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )) : (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <p className="text-muted-foreground">No signal providers available</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </TabsContent>
 
@@ -258,12 +252,12 @@ export default function Signals() {
               <CardContent>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <Badge 
+                    <Badge
                       variant={symbolSignals.consensus.side === "BUY" ? "default" : "destructive"}
                       className="flex items-center gap-1 text-lg px-3 py-1"
                     >
-                      {symbolSignals.consensus.side === "BUY" ? 
-                        <ArrowUp className="h-4 w-4" /> : 
+                      {symbolSignals.consensus.side === "BUY" ?
+                        <ArrowUp className="h-4 w-4" /> :
                         <ArrowDown className="h-4 w-4" />
                       }
                       {symbolSignals.consensus.side}
@@ -283,8 +277,8 @@ export default function Signals() {
             <Card>
               <CardContent className="p-6 text-center">
                 <p className="text-muted-foreground">
-                  {selectedSymbol === "all" ? 
-                    "Select a symbol to view consensus signal" : 
+                  {selectedSymbol === "all" ?
+                    "Select a symbol to view consensus signal" :
                     "No consensus signal available for this symbol"
                   }
                 </p>
