@@ -44,11 +44,26 @@ export const getQueryFn: <T>(options: {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn({ on401: "throw" }),
-      refetchInterval: false,
+      retry: 3,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
+      staleTime: 5000,
+      gcTime: 10 * 60 * 1000, // 10 minutes
+      queryFn: async ({ queryKey }) => {
+        const url = queryKey[0] as string;
+        console.log('Fetching:', url);
+
+        const response = await fetch(url);
+        if (!response.ok) {
+          const errorData = await response.text();
+          console.error('Query failed:', url, response.status, errorData);
+          throw new Error(`HTTP ${response.status}: ${errorData}`);
+        }
+
+        const data = await response.json();
+        console.log('Query success:', url, data);
+        return data;
+      },
     },
     mutations: {
       retry: false,

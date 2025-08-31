@@ -16,6 +16,18 @@ interface RecentAlertsProps {
 }
 
 export default function RecentAlerts({ alerts }: RecentAlertsProps) {
+  if (!alerts || !Array.isArray(alerts)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Alerts</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center text-muted-foreground">Loading alerts...</div>
+        </CardContent>
+      </Card>
+    );
+  }
   const getAlertIcon = (level: string) => {
     switch (level?.toLowerCase()) {
       case "critical": return "fas fa-exclamation-triangle text-destructive";

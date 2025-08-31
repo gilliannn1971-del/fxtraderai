@@ -306,32 +306,13 @@ class StrategyEngine {
 
   async runBacktest(backtest: Backtest): Promise<void> {
     try {
-      console.log(`Starting backtest: ${backtest.name}`);
-      await storage.updateBacktest(backtest.id, { status: "RUNNING" });
-
-      // Simulate backtest execution
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      // Mock backtest results
-      const metrics = {
-        totalReturn: 15.6,
-        sharpeRatio: 1.85,
-        maxDrawdown: -8.3,
-        winRate: 68.5,
-        profitFactor: 2.1,
-        totalTrades: 247,
-        avgTrade: 63.25,
-      };
-
-      await storage.updateBacktest(backtest.id, {
-        status: "COMPLETED",
-        metrics
-      });
-
-      console.log(`Backtest completed: ${backtest.name}`);
+      console.log(`Running backtest: ${backtest.name}`);
+      const { backtestingEngine } = await import("./backtesting-engine");
+      const strategy = await storage.getStrategy(backtest.strategyId);
+      await backtestingEngine.runBacktest(backtest, strategy);
     } catch (error) {
       console.error("Backtest execution error:", error);
-      await storage.updateBacktest(backtest.id, { status: "FAILED" });
+      throw error;
     }
   }
 

@@ -56,8 +56,28 @@ interface Backtest {
   id: string;
   strategyId: string;
   name: string;
+  startDate: string;
+  endDate: string;
+  parameters: { initialBalance: number; commission: number };
   status: string;
+  metrics: {
+    totalReturn: number;
+    sharpeRatio: number;
+    maxDrawdown: number;
+    winRate: number;
+    profitFactor: number;
+    totalTrades: number;
+    avgTrade: number;
+    avgWin?: number;
+    avgLoss?: number;
+    largestWin?: number;
+    largestLoss?: number;
+    consecutiveWins?: number;
+    consecutiveLosses?: number;
+    annualizedReturn?: number;
+  } | null;
   createdAt: string;
+  completedAt: string | null;
 }
 
 interface SystemStatus {
@@ -67,6 +87,18 @@ interface SystemStatus {
   metadata: any;
   lastUpdate: string;
 }
+
+interface AuditTrail {
+  id: string;
+  timestamp: string;
+  user: string;
+  action: string;
+  resource: string;
+  details: any;
+  ip: string;
+}
+
+type InsertBacktest = Omit<Backtest, 'id' | 'status' | 'createdAt' | 'completedAt' | 'metrics'>;
 
 class MockStorage {
   private accounts: Account[] = [
@@ -171,13 +203,46 @@ class MockStorage {
     }
   ];
 
-  private backtests: Backtest[] = [
+  // Mock backtests
+  private mockBacktests: Backtest[] = [
     {
       id: "backtest-1",
       strategyId: "strat-1",
-      name: "Q4 2023 Backtest",
+      name: "Q4 2024 Performance Test",
+      startDate: "2024-01-01",
+      endDate: "2024-12-31",
+      parameters: { initialBalance: 50000, commission: 0.00002 },
       status: "COMPLETED",
-      createdAt: new Date(Date.now() - 86400000).toISOString()
+      metrics: {
+        totalReturn: 12.5,
+        sharpeRatio: 1.85,
+        maxDrawdown: 8.3,
+        winRate: 67.2,
+        profitFactor: 1.94,
+        totalTrades: 234,
+        avgTrade: 45.67,
+        avgWin: 125.30,
+        avgLoss: 64.50,
+        largestWin: 450.00,
+        largestLoss: 280.00,
+        consecutiveWins: 8,
+        consecutiveLosses: 3,
+        annualizedReturn: 15.2
+      },
+      createdAt: new Date("2024-01-01").toISOString(),
+      completedAt: new Date("2024-01-02").toISOString()
+    },
+    {
+      id: "backtest-2",
+      strategyId: "strat-2",
+      name: "Scalping Strategy Test",
+      startDate: "2024-06-01",
+      endDate: "2024-08-31",
+      parameters: { initialBalance: 25000, commission: 0.00003 },
+      status: "RUNNING",
+      metrics: null,
+      createdAt: new Date("2024-08-15").toISOString(),
+      completedAt: null
     }
   ];
 
@@ -328,21 +393,36 @@ class MockStorage {
 
   // Backtest methods
   async getBacktests(strategyId?: string): Promise<Backtest[]> {
-    return strategyId 
-      ? this.backtests.filter(b => b.strategyId === strategyId)
-      : this.backtests;
+    let backtests = this.mockBacktests;
+    if (strategyId) {
+      backtests = backtests.filter(b => b.strategyId === strategyId);
+    }
+    return backtests;
   }
 
-  async createBacktest(data: any): Promise<Backtest> {
-    const backtest: Backtest = {
-      id: `backtest-${Date.now()}`,
-      strategyId: data.strategyId,
-      name: data.name,
-      status: "RUNNING",
-      createdAt: new Date().toISOString()
+  async getBacktest(id: string): Promise<Backtest> {
+    const backtest = this.mockBacktests.find(b => b.id === id);
+    if (!backtest) throw new Error("Backtest not found");
+    return backtest as any;
+  }
+
+  async createBacktest(data: InsertBacktest): Promise<Backtest> {
+    const backtest = {
+      id: Math.random().toString(36).substring(2),
+      ...data,
+      status: "PENDING",
+      createdAt: new Date().toISOString(),
     };
-    this.backtests.push(backtest);
-    return backtest;
+    this.mockBacktests.push(backtest as any);
+    return backtest as any;
+  }
+
+  async updateBacktest(id: string, updates: Partial<Backtest>): Promise<Backtest> {
+    const index = this.mockBacktests.findIndex(b => b.id === id);
+    if (index === -1) throw new Error("Backtest not found");
+
+    this.mockBacktests[index] = { ...this.mockBacktests[index], ...updates };
+    return this.mockBacktests[index] as any;
   }
 
   // System status methods
@@ -353,8 +433,8 @@ class MockStorage {
   async updateSystemStatus(service: string, updates: Partial<SystemStatus>): Promise<void> {
     const index = this.systemStatuses.findIndex(s => s.service === service);
     if (index !== -1) {
-      this.systemStatuses[index] = { 
-        ...this.systemStatuses[index], 
+      this.systemStatuses[index] = {
+        ...this.systemStatuses[index],
         ...updates,
         lastUpdate: new Date().toISOString()
       };
@@ -368,6 +448,31 @@ class MockStorage {
         ...updates
       });
     }
+  }
+
+  // Audit trail methods
+  async getAuditTrail(period?: string): Promise<AuditTrail[]> {
+    // Mock audit trail data
+    return [
+      {
+        id: "audit-1",
+        timestamp: new Date().toISOString(),
+        user: "system",
+        action: "STRATEGY_STARTED",
+        resource: "strategy:strat-1",
+        details: { strategyName: "Breakout Volatility" },
+        ip: "127.0.0.1"
+      },
+      {
+        id: "audit-2",
+        timestamp: new Date(Date.now() - 300000).toISOString(),
+        user: "admin",
+        action: "POSITION_CLOSED",
+        resource: "position:pos-1",
+        details: { symbol: "EURUSD", pnl: 125.50 },
+        ip: "192.168.1.100"
+      }
+    ];
   }
 }
 

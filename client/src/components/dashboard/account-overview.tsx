@@ -1,19 +1,34 @@
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface AccountData {
   balance: string;
   equity: string;
   dailyPnL: string;
   openPnL: string;
+  maxDrawdown?: number; // Added for completeness, though not used in the provided snippet
 }
 
 interface AccountOverviewProps {
-  data: AccountData;
+  data: AccountData | null | undefined;
 }
 
 export default function AccountOverview({ data }: AccountOverviewProps) {
-  const dailyPnL = parseFloat(data.dailyPnL);
-  const openPnL = parseFloat(data.openPnL);
+  if (!data) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Account Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center text-muted-foreground">Loading account data...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const dailyPnL = parseFloat((data.dailyPnL || "0").replace(/[+$,]/g, ''));
+  const openPnL = parseFloat((data.openPnL || "0").replace(/[+$,]/g, ''));
+  // const maxDrawdownPercent = (data.maxDrawdown || 0) * 100; // This line was in the changes but not in the original, so it's not included.
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -25,7 +40,7 @@ export default function AccountOverview({ data }: AccountOverviewProps) {
           </div>
           <div className="space-y-1">
             <p className="text-2xl font-bold font-mono" data-testid="account-balance">
-              ${parseFloat(data.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              ${parseFloat(data.balance || "0").toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </p>
             <p className={`text-sm ${dailyPnL >= 0 ? 'profit' : 'loss'}`}>
               <i className={`fas ${dailyPnL >= 0 ? 'fa-arrow-up' : 'fa-arrow-down'} text-xs`}></i>
@@ -63,8 +78,8 @@ export default function AccountOverview({ data }: AccountOverviewProps) {
           <div className="space-y-2">
             <p className="text-2xl font-bold font-mono" data-testid="daily-drawdown">-2.1%</p>
             <div className="w-full bg-muted rounded-full h-2">
-              <div 
-                className="bg-primary h-2 rounded-full transition-all duration-300" 
+              <div
+                className="bg-primary h-2 rounded-full transition-all duration-300"
                 style={{ width: "21%" }}
                 data-testid="drawdown-progress"
               ></div>

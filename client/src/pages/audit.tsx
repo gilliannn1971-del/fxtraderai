@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function Audit() {
@@ -133,7 +137,7 @@ export default function Audit() {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
@@ -151,7 +155,7 @@ export default function Audit() {
   return (
     <>
       <Header title="Audit Trail" description="Track all system changes and user actions" />
-      
+
       <div className="p-6 space-y-6">
         {/* Filters */}
         <Card>
@@ -279,14 +283,14 @@ export default function Audit() {
                     </p>
                   </div>
                 </div>
-                
+
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-2">Changes</p>
                   <pre className="text-xs bg-muted p-3 rounded overflow-x-auto" data-testid="audit-detail-changes">
                     {JSON.stringify(selectedAuditItem.changes, null, 2)}
                   </pre>
                 </div>
-                
+
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-2">Metadata</p>
                   <pre className="text-xs bg-muted p-3 rounded overflow-x-auto" data-testid="audit-detail-metadata">

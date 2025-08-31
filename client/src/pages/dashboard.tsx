@@ -27,13 +27,29 @@ interface DashboardData {
 }
 
 export default function Dashboard() {
-  const { data: dashboardData, isLoading } = useQuery<DashboardData>({
+  const { data: dashboardData, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["/api/dashboard"],
     refetchInterval: 5000, // Refetch every 5 seconds
+    retry: 3,
+    staleTime: 1000,
   });
 
   // WebSocket for real-time updates
   useWebSocket();
+
+  console.log('Dashboard data:', dashboardData);
+  console.log('Dashboard loading:', isLoading);
+  console.log('Dashboard error:', error);
+
+  const safeData = dashboardData || {
+    account: { balance: "0", equity: "0", dailyPnL: "0", openPnL: "0" },
+    risk: null,
+    strategies: null,
+    openPositions: [],
+    recentTrades: [],
+    systemHealth: [],
+    alerts: [],
+  };
 
   if (isLoading) {
     return (
@@ -46,11 +62,17 @@ export default function Dashboard() {
     );
   }
 
-  if (!dashboardData) {
+  if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <p className="text-destructive">Failed to load dashboard data</p>
+          <p className="text-destructive">Error loading dashboard: {error.message}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-2 px-4 py-2 bg-primary text-white rounded"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -63,24 +85,26 @@ export default function Dashboard() {
         description="Live trading system overview" 
       />
 
-      <div className="p-6 space-y-6">
-        <AccountOverview data={dashboardData.account} />
-
-        <RiskStatus data={dashboardData.risk} />
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ActiveStrategies 
-            strategies={dashboardData.strategies} 
-            openPositions={dashboardData.openPositions}
-          />
-          <RecentTrades trades={dashboardData.recentTrades} />
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+        {/* Top Row - Overview Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+          <AccountOverview account={safeData?.account} />
+          <RiskStatus risk={safeData?.risk} />
+          <div className="sm:col-span-2">
+            <SystemHealth health={safeData?.systemHealth} />
+          </div>
         </div>
 
-        <OpenPositions positions={dashboardData.openPositions} />
+        {/* Middle Row */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
+          <ActiveStrategies strategies={safeData?.strategies} />
+          <OpenPositions positions={safeData?.openPositions} />
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <SystemHealth health={dashboardData.systemHealth} />
-          <RecentAlerts alerts={dashboardData.alerts} />
+        {/* Bottom Row */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
+          <RecentTrades trades={safeData?.recentTrades} />
+          <RecentAlerts alerts={safeData?.alerts} />
         </div>
       </div>
     </>

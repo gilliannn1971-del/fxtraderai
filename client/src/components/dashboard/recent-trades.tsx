@@ -16,6 +16,18 @@ interface RecentTradesProps {
 }
 
 export default function RecentTrades({ trades }: RecentTradesProps) {
+  if (!trades || !Array.isArray(trades)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Trades</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center text-muted-foreground">Loading trades...</div>
+        </CardContent>
+      </Card>
+    );
+  }
   // Mock some P&L calculations for display
   const tradesWithPnL = trades.map((trade, index) => ({
     ...trade,

@@ -138,7 +138,7 @@ export function useWebSocket(url: string = '/ws') {
         break;
 
       case 'DASHBOARD_UPDATE':
-          queryClient.invalidateQueries({ queryKey: ['/api/dashboard'] });
+          queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
           break;
 
         case 'POSITIONS_UPDATE':
@@ -157,17 +157,8 @@ export function useWebSocket(url: string = '/ws') {
           queryClient.invalidateQueries({ queryKey: ['/api/strategies'] });
           break;
 
-        case 'ALERT_CREATED':
-          queryClient.invalidateQueries({ queryKey: ['/api/alerts'] });
-          break;
-
         case 'SYSTEM_HEALTH_UPDATE':
           queryClient.invalidateQueries({ queryKey: ['/api/system/health'] });
-          break;
-
-        case 'EMERGENCY_STOP':
-          queryClient.invalidateQueries({ queryKey: ['/api/dashboard'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/strategies'] });
           break;
       default:
           console.log('Unknown WebSocket message type:', data.type);

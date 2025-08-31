@@ -1,4 +1,3 @@
-
 import express, { type Request, Response, NextFunction } from "express";
 import { config } from "dotenv";
 import { registerRoutes } from "./routes";
@@ -9,6 +8,22 @@ config();
 
 const app = express();
 app.use(express.json());
+
+// Initialize signal engine
+import { signalEngine } from "./services/signal-engine";
+
+// Start generating signals for common forex pairs
+const FOREX_SYMBOLS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF"];
+setInterval(async () => {
+  try {
+    await signalEngine.generateSignals(FOREX_SYMBOLS);
+  } catch (error) {
+    console.error("Error generating signals:", error);
+  }
+}, 60000); // Generate signals every minute
+
+// Generate initial signals
+signalEngine.generateSignals(FOREX_SYMBOLS).catch(console.error);
 app.use(express.urlencoded({ extended: false }));
 
 app.use((req, res, next) => {

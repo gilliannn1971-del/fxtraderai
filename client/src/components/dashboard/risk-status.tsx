@@ -12,6 +12,18 @@ interface RiskStatusProps {
 }
 
 export default function RiskStatus({ data }: RiskStatusProps) {
+  if (!data) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Risk Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center text-muted-foreground">Loading risk data...</div>
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardHeader className="pb-3">

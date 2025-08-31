@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import Header from "@/components/layout/header";
@@ -269,7 +270,7 @@ export default function Backtests() {
 
         {/* Backtest Results */}
         <div className="grid gap-6">
-          {backtests?.map((backtest: any, index: number) => (
+          {backtests && backtests.length > 0 ? backtests.map((backtest: any, index: number) => (
             <Card key={backtest.id} data-testid={`backtest-card-${index}`}>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -314,7 +315,7 @@ export default function Backtests() {
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                     <div className="text-center">
                       <p className="text-sm text-muted-foreground">Total Return</p>
-                      <p className={`text-lg font-bold ${backtest.metrics.totalReturn >= 0 ? 'profit' : 'loss'}`} data-testid={`backtest-return-${index}`}>
+                      <p className={`text-lg font-bold ${backtest.metrics.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}`} data-testid={`backtest-return-${index}`}>
                         {formatMetric(backtest.metrics.totalReturn, "%")}
                       </p>
                     </div>
@@ -326,7 +327,7 @@ export default function Backtests() {
                     </div>
                     <div className="text-center">
                       <p className="text-sm text-muted-foreground">Max Drawdown</p>
-                      <p className="text-lg font-bold loss" data-testid={`backtest-drawdown-${index}`}>
+                      <p className="text-lg font-bold text-red-600" data-testid={`backtest-drawdown-${index}`}>
                         {formatMetric(Math.abs(backtest.metrics.maxDrawdown), "%")}
                       </p>
                     </div>
@@ -379,7 +380,7 @@ export default function Backtests() {
                 )}
               </CardContent>
             </Card>
-          )) || (
+          )) : (
             <Card>
               <CardContent className="p-8 text-center">
                 <i className="fas fa-history text-4xl text-muted-foreground mb-4"></i>

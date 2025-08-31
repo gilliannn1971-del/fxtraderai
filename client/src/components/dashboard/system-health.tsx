@@ -12,6 +12,19 @@ interface SystemHealthProps {
 }
 
 export default function SystemHealth({ health }: SystemHealthProps) {
+  if (!health || !Array.isArray(health)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>System Health & Broker Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center text-muted-foreground">Loading system health...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const getStatusClass = (status: string) => {
     switch (status.toLowerCase()) {
       case "online": return "status-online";
@@ -66,7 +79,7 @@ export default function SystemHealth({ health }: SystemHealthProps) {
       <CardHeader className="pb-3">
         <CardTitle>System Health & Broker Status</CardTitle>
       </CardHeader>
-      
+
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {systemComponents.map((component, index) => (
@@ -75,9 +88,9 @@ export default function SystemHealth({ health }: SystemHealthProps) {
                 <h4 className="font-medium" data-testid={`component-name-${index}`}>{component.name}</h4>
                 <div className="flex items-center space-x-2">
                   <div className={`w-2 h-2 rounded-full ${getStatusClass(component.status)}`}></div>
-                  <span 
+                  <span
                     className={`text-xs ${
-                      component.status === "ONLINE" ? "profit" : 
+                      component.status === "ONLINE" ? "profit" :
                       component.status === "WARNING" ? "warning" : "neutral"
                     }`}
                     data-testid={`component-status-${index}`}

@@ -30,6 +30,11 @@ export default function Brokers() {
     queryKey: ["/api/accounts"],
   });
 
+  const { data: brokerConnections, isLoading: isLoadingConnections } = useQuery({
+    queryKey: ["/api/brokers/connections"],
+    refetchInterval: 10000,
+  });
+
   const { data: systemHealth } = useQuery<SystemStatus[]>({
     queryKey: ["/api/system/status"],
     refetchInterval: 5000,
@@ -58,7 +63,7 @@ export default function Brokers() {
     return <Badge variant={variant}>{status}</Badge>;
   };
 
-  const brokerConnections = [
+  const displayConnections = brokerConnections || [
     {
       name: "OANDA (Demo)",
       type: "REST API",
@@ -88,7 +93,7 @@ export default function Brokers() {
     }
   ];
 
-  if (isLoading) {
+  if (isLoading || isLoadingConnections) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -230,7 +235,7 @@ export default function Brokers() {
 
         {/* Broker Status Cards */}
         <div className="grid gap-6">
-          {brokerConnections.map((broker, index) => (
+          {displayConnections.map((broker, index) => (
             <Card key={broker.name} data-testid={`broker-card-${index}`}>
               <CardHeader>
                 <div className="flex items-center justify-between">

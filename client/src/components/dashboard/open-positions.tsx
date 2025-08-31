@@ -15,6 +15,7 @@ interface Position {
   stopLoss: string | null;
   takeProfit: string | null;
   strategyId: string | null;
+  isOpen?: boolean; // Added to align with the filter
 }
 
 interface OpenPositionsProps {
@@ -24,6 +25,21 @@ interface OpenPositionsProps {
 export default function OpenPositions({ positions }: OpenPositionsProps) {
   const { toast } = useToast();
 
+  if (!positions || !Array.isArray(positions)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Open Positions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center text-muted-foreground">Loading positions...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const filteredPositions = positions.filter(position => position.isOpen);
+
   const handleClosePosition = async (positionId: string) => {
     try {
       await apiRequest("POST", `/api/positions/${positionId}/close`);
@@ -31,7 +47,7 @@ export default function OpenPositions({ positions }: OpenPositionsProps) {
         title: "Position Closed",
         description: "Position has been closed successfully",
       });
-      
+
       // Invalidate dashboard data to refresh
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
     } catch (error) {
@@ -63,7 +79,7 @@ export default function OpenPositions({ positions }: OpenPositionsProps) {
           </div>
         </div>
       </CardHeader>
-      
+
       <CardContent className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -81,11 +97,11 @@ export default function OpenPositions({ positions }: OpenPositionsProps) {
               </tr>
             </thead>
             <tbody className="text-sm">
-              {positions.map((position, index) => {
+              {filteredPositions.map((position, index) => {
                 const pnl = parseFloat(position.unrealizedPnL || "0");
                 return (
-                  <tr 
-                    key={position.id} 
+                  <tr
+                    key={position.id}
                     className="border-b border-border hover:bg-muted/50"
                     data-testid={`position-row-${index}`}
                   >
@@ -96,10 +112,10 @@ export default function OpenPositions({ positions }: OpenPositionsProps) {
                       {getStrategyName(position.strategyId)}
                     </td>
                     <td className="p-4">
-                      <span 
+                      <span
                         className={`px-2 py-1 rounded text-xs ${
-                          position.side === "BUY" 
-                            ? "bg-green-500/20 text-green-400" 
+                          position.side === "BUY"
+                            ? "bg-green-500/20 text-green-400"
                             : "bg-red-500/20 text-red-400"
                         }`}
                         data-testid={`position-side-${index}`}
@@ -116,7 +132,7 @@ export default function OpenPositions({ positions }: OpenPositionsProps) {
                     <td className="p-4 font-mono" data-testid={`position-current-${index}`}>
                       {position.currentPrice ? parseFloat(position.currentPrice).toFixed(4) : "--"}
                     </td>
-                    <td 
+                    <td
                       className={`p-4 font-mono ${pnl >= 0 ? 'profit' : 'loss'}`}
                       data-testid={`position-pnl-${index}`}
                     >
@@ -144,7 +160,7 @@ export default function OpenPositions({ positions }: OpenPositionsProps) {
                   </tr>
                 );
               })}
-              {positions.length === 0 && (
+              {filteredPositions.length === 0 && (
                 <tr>
                   <td colSpan={9} className="p-8 text-center text-muted-foreground">
                     No open positions

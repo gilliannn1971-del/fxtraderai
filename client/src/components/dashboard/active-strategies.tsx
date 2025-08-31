@@ -22,6 +22,20 @@ interface ActiveStrategiesProps {
 }
 
 export default function ActiveStrategies({ strategies, openPositions }: ActiveStrategiesProps) {
+  // Add null checks for strategies data
+  if (!strategies || !Array.isArray(strategies)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Active Strategies</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center text-muted-foreground">Loading strategies...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Group positions by strategy for display
   const strategyPerformance = [
     {
@@ -71,7 +85,7 @@ export default function ActiveStrategies({ strategies, openPositions }: ActiveSt
           </Link>
         </div>
       </CardHeader>
-      
+
       <CardContent>
         <div className="space-y-4">
           {strategyPerformance.map((strategy, index) => (
