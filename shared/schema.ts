@@ -1,143 +1,148 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, real, blob } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Enums
-export const accountModeEnum = pgEnum("account_mode", ["live", "paper", "backtest"]);
-export const orderSideEnum = pgEnum("order_side", ["BUY", "SELL"]);
-export const orderTypeEnum = pgEnum("order_type", ["MARKET", "LIMIT", "STOP", "STOP_LIMIT"]);
-export const orderStatusEnum = pgEnum("order_status", ["PENDING", "FILLED", "CANCELLED", "REJECTED", "PARTIAL"]);
-export const strategyStatusEnum = pgEnum("strategy_status", ["RUNNING", "PAUSED", "STOPPED", "ERROR"]);
-export const riskEventLevelEnum = pgEnum("risk_event_level", ["INFO", "WARNING", "CRITICAL"]);
-
 // Users
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
   username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
   password: text("password").notNull(),
   role: text("role").notNull().default("trader"),
-  createdAt: timestamp("created_at").defaultNow(),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
+// User Sessions
+export const userSessions = sqliteTable("user_sessions", {
+  id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
+  userId: text("user_id").notNull().references(() => users.id),
+  token: text("token").notNull().unique(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 // Accounts
-export const accounts = pgTable("accounts", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const accounts = sqliteTable("accounts", {
+  id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
+  userId: text("user_id").notNull().references(() => users.id),
   brokerId: text("broker_id").notNull(),
   accountNumber: text("account_number").notNull(),
-  mode: accountModeEnum("mode").notNull().default("paper"),
+  mode: text("mode").notNull().default("paper"), // live, paper, backtest
   baseCurrency: text("base_currency").notNull().default("USD"),
-  leverage: decimal("leverage", { precision: 10, scale: 2 }).notNull().default("100"),
-  balance: decimal("balance", { precision: 15, scale: 2 }).notNull().default("0"),
-  equity: decimal("equity", { precision: 15, scale: 2 }).notNull().default("0"),
-  propRules: jsonb("prop_rules"), // JSON object for prop firm rules
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
+  leverage: real("leverage").notNull().default(100),
+  balance: real("balance").notNull().default(0),
+  equity: real("equity").notNull().default(0),
+  propRules: text("prop_rules"), // JSON string for prop firm rules
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 // Strategies
-export const strategies = pgTable("strategies", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const strategies = sqliteTable("strategies", {
+  id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
+  userId: text("user_id").notNull().references(() => users.id),
   name: text("name").notNull(),
   version: text("version").notNull().default("1.0.0"),
   description: text("description"),
-  parameters: jsonb("parameters").notNull(), // Strategy configuration
-  status: strategyStatusEnum("status").notNull().default("STOPPED"),
-  riskProfile: jsonb("risk_profile"), // Risk parameters for this strategy
-  symbols: text("symbols").array().notNull(), // Trading symbols
-  isEnabled: boolean("is_enabled").notNull().default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  parameters: text("parameters").notNull(), // JSON string for strategy configuration
+  status: text("status").notNull().default("STOPPED"), // RUNNING, PAUSED, STOPPED, ERROR
+  riskProfile: text("risk_profile"), // JSON string for risk parameters
+  symbols: text("symbols").notNull(), // JSON array as string
+  isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 // Orders
-export const orders = pgTable("orders", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  accountId: varchar("account_id").notNull().references(() => accounts.id),
-  strategyId: varchar("strategy_id").references(() => strategies.id),
+export const orders = sqliteTable("orders", {
+  id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
+  accountId: text("account_id").notNull().references(() => accounts.id),
+  strategyId: text("strategy_id").references(() => strategies.id),
   symbol: text("symbol").notNull(),
-  side: orderSideEnum("side").notNull(),
-  quantity: decimal("quantity", { precision: 10, scale: 5 }).notNull(),
-  type: orderTypeEnum("type").notNull(),
-  price: decimal("price", { precision: 10, scale: 5 }),
-  stopLoss: decimal("stop_loss", { precision: 10, scale: 5 }),
-  takeProfit: decimal("take_profit", { precision: 10, scale: 5 }),
-  status: orderStatusEnum("status").notNull().default("PENDING"),
+  side: text("side").notNull(), // BUY, SELL
+  quantity: real("quantity").notNull(),
+  type: text("type").notNull(), // MARKET, LIMIT, STOP, STOP_LIMIT
+  price: real("price"),
+  stopLoss: real("stop_loss"),
+  takeProfit: real("take_profit"),
+  status: text("status").notNull().default("PENDING"), // PENDING, FILLED, CANCELLED, REJECTED, PARTIAL
   brokerOrderId: text("broker_order_id"),
   idempotencyKey: text("idempotency_key").notNull(),
-  filledQuantity: decimal("filled_quantity", { precision: 10, scale: 5 }).default("0"),
-  avgFillPrice: decimal("avg_fill_price", { precision: 10, scale: 5 }),
-  commission: decimal("commission", { precision: 10, scale: 2 }),
-  slippage: decimal("slippage", { precision: 10, scale: 5 }),
-  createdAt: timestamp("created_at").defaultNow(),
-  filledAt: timestamp("filled_at"),
+  filledQuantity: real("filled_quantity").default(0),
+  avgFillPrice: real("avg_fill_price"),
+  commission: real("commission"),
+  slippage: real("slippage"),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  filledAt: integer("filled_at", { mode: "timestamp" }),
 });
 
 // Positions
-export const positions = pgTable("positions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  accountId: varchar("account_id").notNull().references(() => accounts.id),
-  strategyId: varchar("strategy_id").references(() => strategies.id),
+export const positions = sqliteTable("positions", {
+  id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
+  accountId: text("account_id").notNull().references(() => accounts.id),
+  strategyId: text("strategy_id").references(() => strategies.id),
   symbol: text("symbol").notNull(),
-  side: orderSideEnum("side").notNull(),
-  quantity: decimal("quantity", { precision: 10, scale: 5 }).notNull(),
-  avgPrice: decimal("avg_price", { precision: 10, scale: 5 }).notNull(),
-  currentPrice: decimal("current_price", { precision: 10, scale: 5 }),
-  unrealizedPnL: decimal("unrealized_pnl", { precision: 15, scale: 2 }).default("0"),
-  realizedPnL: decimal("realized_pnl", { precision: 15, scale: 2 }).default("0"),
-  stopLoss: decimal("stop_loss", { precision: 10, scale: 5 }),
-  takeProfit: decimal("take_profit", { precision: 10, scale: 5 }),
-  isOpen: boolean("is_open").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  closedAt: timestamp("closed_at"),
+  side: text("side").notNull(), // BUY, SELL
+  quantity: real("quantity").notNull(),
+  avgPrice: real("avg_price").notNull(),
+  currentPrice: real("current_price"),
+  unrealizedPnL: real("unrealized_pnl").default(0),
+  realizedPnL: real("realized_pnl").default(0),
+  stopLoss: real("stop_loss"),
+  takeProfit: real("take_profit"),
+  isOpen: integer("is_open", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  closedAt: integer("closed_at", { mode: "timestamp" }),
 });
 
 // Risk Events
-export const riskEvents = pgTable("risk_events", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  accountId: varchar("account_id").notNull().references(() => accounts.id),
-  strategyId: varchar("strategy_id").references(() => strategies.id),
-  level: riskEventLevelEnum("level").notNull(),
-  rule: text("rule").notNull(), // Which risk rule was triggered
-  action: text("action").notNull(), // Action taken
-  details: jsonb("details"), // Additional context
-  createdAt: timestamp("created_at").defaultNow(),
+export const riskEvents = sqliteTable("risk_events", {
+  id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
+  accountId: text("account_id").notNull().references(() => accounts.id),
+  strategyId: text("strategy_id").references(() => strategies.id),
+  level: text("level").notNull(), // INFO, WARNING, CRITICAL
+  rule: text("rule").notNull(),
+  action: text("action").notNull(),
+  details: text("details"), // JSON string
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 // Backtests
-export const backtests = pgTable("backtests", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  strategyId: varchar("strategy_id").notNull().references(() => strategies.id),
+export const backtests = sqliteTable("backtests", {
+  id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
+  strategyId: text("strategy_id").notNull().references(() => strategies.id),
   name: text("name").notNull(),
-  startDate: timestamp("start_date").notNull(),
-  endDate: timestamp("end_date").notNull(),
-  parameters: jsonb("parameters").notNull(),
-  metrics: jsonb("metrics"), // Performance metrics
-  status: text("status").notNull().default("PENDING"), // PENDING, RUNNING, COMPLETED, FAILED
-  artifactUri: text("artifact_uri"), // Path to detailed results
-  createdAt: timestamp("created_at").defaultNow(),
-  completedAt: timestamp("completed_at"),
+  startDate: integer("start_date", { mode: "timestamp" }).notNull(),
+  endDate: integer("end_date", { mode: "timestamp" }).notNull(),
+  parameters: text("parameters").notNull(), // JSON string
+  metrics: text("metrics"), // JSON string for performance metrics
+  status: text("status").notNull().default("PENDING"),
+  artifactUri: text("artifact_uri"),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
 });
 
 // Alerts
-export const alerts = pgTable("alerts", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  level: riskEventLevelEnum("level").notNull(),
+export const alerts = sqliteTable("alerts", {
+  id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
+  level: text("level").notNull(), // INFO, WARNING, CRITICAL
   title: text("title").notNull(),
   message: text("message").notNull(),
-  source: text("source"), // Which service generated the alert
-  isRead: boolean("is_read").notNull().default(false),
-  createdAt: timestamp("created_at").defaultNow(),
+  source: text("source"),
+  isRead: integer("is_read", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 // System Status
-export const systemStatus = pgTable("system_status", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const systemStatus = sqliteTable("system_status", {
+  id: text("id").primaryKey().default(sql`(hex(randomblob(16)))`),
   service: text("service").notNull(),
-  status: text("status").notNull(), // ONLINE, OFFLINE, WARNING, ERROR
-  latency: integer("latency"), // milliseconds
-  metadata: jsonb("metadata"), // Additional service-specific data
-  lastUpdate: timestamp("last_update").defaultNow(),
+  status: text("status").notNull(),
+  latency: integer("latency"),
+  metadata: text("metadata"), // JSON string
+  lastUpdate: integer("last_update", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 // Relations
@@ -194,6 +199,19 @@ export const backtestsRelations = relations(backtests, ({ one }) => ({
   }),
 }));
 
+export const userSessionsRelations = relations(userSessions, ({ one }) => ({
+  user: one(users, {
+    fields: [userSessions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const usersRelations = relations(users, ({ many }) => ({
+  accounts: many(accounts),
+  strategies: many(strategies),
+  sessions: many(userSessions),
+}));
+
 // Insert Schemas
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertAccountSchema = createInsertSchema(accounts).omit({ id: true, createdAt: true });
@@ -204,6 +222,7 @@ export const insertRiskEventSchema = createInsertSchema(riskEvents).omit({ id: t
 export const insertBacktestSchema = createInsertSchema(backtests).omit({ id: true, createdAt: true, completedAt: true });
 export const insertAlertSchema = createInsertSchema(alerts).omit({ id: true, createdAt: true });
 export const insertSystemStatusSchema = createInsertSchema(systemStatus).omit({ id: true, lastUpdate: true });
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({ id: true, createdAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -224,3 +243,5 @@ export type Alert = typeof alerts.$inferSelect;
 export type InsertAlert = z.infer<typeof insertAlertSchema>;
 export type SystemStatus = typeof systemStatus.$inferSelect;
 export type InsertSystemStatus = z.infer<typeof insertSystemStatusSchema>;
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;

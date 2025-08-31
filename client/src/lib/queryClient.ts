@@ -49,20 +49,42 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: 5000,
       gcTime: 10 * 60 * 1000, // 10 minutes
-      queryFn: async ({ queryKey }) => {
-        const url = queryKey[0] as string;
-        console.log('Fetching:', url);
+      queryFn: async ({ queryKey, signal }) => {
+        const token = localStorage.getItem("auth_token");
+        const headers: HeadersInit = {};
 
-        const response = await fetch(url);
-        if (!response.ok) {
-          const errorData = await response.text();
-          console.error('Query failed:', url, response.status, errorData);
-          throw new Error(`HTTP ${response.status}: ${errorData}`);
+        if (token) {
+          headers.Authorization = `Bearer ${token}`;
         }
 
-        const data = await response.json();
-        console.log('Query success:', url, data);
-        return data;
+        const response = await fetch(queryKey[0] as string, {
+          signal,
+          headers,
+        });
+
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            // Redirect to login on auth failure
+            localStorage.removeItem("auth_token");
+            localStorage.removeItem("user");
+            window.location.href = "/";
+            return;
+          }
+          if (response.status >= 500) {
+            throw new Error(`Server error: ${response.status}`);
+          }
+          if (response.status === 404) {
+            throw new Error("Not found");
+          }
+          const errorText = await response.text();
+          throw new Error(errorText || `HTTP error ${response.status}`);
+        }
+
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          return response.json();
+        }
+        return response.text();
       },
     },
     mutations: {

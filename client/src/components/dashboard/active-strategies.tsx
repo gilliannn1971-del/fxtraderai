@@ -18,10 +18,10 @@ interface Position {
 
 interface ActiveStrategiesProps {
   strategies: StrategiesData;
-  openPositions: Position[];
+  openPositions?: Position[];
 }
 
-export default function ActiveStrategies({ strategies, openPositions }: ActiveStrategiesProps) {
+export default function ActiveStrategies({ strategies, openPositions = [] }: ActiveStrategiesProps) {
   // Add null checks for strategies data
   if (!strategies || !Array.isArray(strategies)) {
     return (

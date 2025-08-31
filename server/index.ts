@@ -9,6 +9,10 @@ config();
 const app = express();
 app.use(express.json());
 
+// Initialize database and create admin user
+import { startupService } from "./services/startup";
+await startupService.initialize();
+
 // Initialize signal engine
 import { signalEngine } from "./services/signal-engine";
 

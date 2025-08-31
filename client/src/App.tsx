@@ -16,6 +16,11 @@ import Signals from "@/pages/signals";
 import NotFoundPage from "./pages/not-found";
 import Sidebar from "@/components/layout/sidebar";
 import { ErrorBoundary } from "react-error-boundary";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import Login from "@/pages/login";
+import Settings from "./pages/settings";
+import AccountManagement from "./pages/account-management";
+import Support from "./pages/support";
 
 function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
   return (
@@ -23,7 +28,7 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
       <div className="text-center p-8">
         <h1 className="text-2xl font-bold mb-4">Something went wrong</h1>
         <p className="text-muted-foreground mb-4">{error.message}</p>
-        <button 
+        <button
           onClick={resetErrorBoundary}
           className="px-4 py-2 bg-primary text-primary-foreground rounded"
         >
@@ -50,11 +55,35 @@ function Router() {
           <Route path="/telegram" component={TelegramPage} />
           <Route path="/analytics" component={Analytics} />
           <Route path="/signals" component={Signals} />
+          <Route path="/settings" component={Settings} />
+          <Route path="/account" component={AccountManagement} />
+          <Route path="/support" component={Support} />
           <Route component={NotFoundPage} />
         </Switch>
       </main>
     </div>
   );
+}
+
+function AuthenticatedApp() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
+  return <Router />;
 }
 
 function App() {
@@ -67,10 +96,12 @@ function App() {
     >
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <div className="dark min-h-screen bg-background text-foreground">
-            <Toaster />
-            <Router />
-          </div>
+          <AuthProvider>
+            <div className="dark min-h-screen bg-background text-foreground">
+              <Toaster />
+              <AuthenticatedApp />
+            </div>
+          </AuthProvider>
         </TooltipProvider>
       </QueryClientProvider>
     </ErrorBoundary>

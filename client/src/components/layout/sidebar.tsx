@@ -1,26 +1,38 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
-import { 
-  Home, 
-  TrendingUp, 
-  Shield, 
-  Building2, 
-  History, 
-  FileText, 
+import {
+  Home,
+  TrendingUp,
+  Shield,
+  Building2,
+  History,
+  FileText,
   MessageSquare,
   BarChart3,
   Search,
   Zap,
   Menu,
-  X
+  X,
+  LogOut,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { useSidebar } from "@/components/ui/sidebar";
+import { useMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/hooks/use-auth";
 
 const Sidebar = () => {
   const [location] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -131,6 +143,36 @@ const Sidebar = () => {
           <span>Telegram Bot</span>
         </div>
       </Link>
+
+      <div className="border-t border-border my-4"></div>
+
+      <Link href="/settings">
+        <div className={cn(
+          "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors cursor-pointer",
+          location === "/settings" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground hover:text-foreground"
+        )}>
+          <i className="fas fa-cog h-5 w-5"></i>
+          <span>Settings</span>
+        </div>
+      </Link>
+      <Link href="/account">
+        <div className={cn(
+          "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors cursor-pointer",
+          location === "/account" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground hover:text-foreground"
+        )}>
+          <User className="h-5 w-5" />
+          <span>Account Management</span>
+        </div>
+      </Link>
+      <Link href="/support">
+        <div className={cn(
+          "flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors cursor-pointer",
+          location === "/support" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground hover:text-foreground"
+        )}>
+          <MessageSquare className="h-5 w-5" />
+          <span>Support</span>
+        </div>
+      </Link>
     </>
   );
 
@@ -155,18 +197,43 @@ const Sidebar = () => {
         )}
 
         {/* Mobile Sidebar */}
-        <div className={cn(
-          "md:hidden fixed top-0 left-0 z-50 h-full w-64 bg-background border-r border-border transform transition-transform duration-300 ease-in-out",
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        )}>
-          <div className="p-6 border-b border-border">
-            <h1 className="text-xl font-semibold">Trading Bot</h1>
-            <p className="text-sm text-muted-foreground">Automated Trading Platform</p>
-          </div>
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-            <NavigationItems />
-          </nav>
-        </div>
+        <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+          <SheetContent side="left" className="w-72 p-0 border-r-0 bg-background">
+            <ScrollArea className="h-[calc(100vh-1rem)] w-full">
+              <div className="flex flex-col h-full">
+                <div className="flex items-center gap-2 px-4 py-6 border-b">
+                  <TrendingUp className="h-6 w-6 text-primary" />
+                  <span className="font-bold text-lg">TradingBot</span>
+                </div>
+
+                <div className="px-4 py-3 border-b bg-muted/20">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{user?.username}</p>
+                      <p className="text-xs text-muted-foreground truncate">{user?.role}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+                  <NavigationItems />
+                </nav>
+
+                <div className="p-4 border-t">
+                  <Button
+                    variant="ghost"
+                    onClick={handleLogout}
+                    className="w-full justify-start text-muted-foreground hover:text-foreground"
+                  >
+                    <LogOut className="mr-3 h-4 w-4" />
+                    Logout
+                  </Button>
+                </div>
+              </div>
+            </ScrollArea>
+          </SheetContent>
+        </Sheet>
       </>
     );
   }
@@ -185,28 +252,22 @@ const Sidebar = () => {
         </div>
       </div>
 
-      <nav className="p-4 space-y-2">
-        <NavigationItems />
-      </nav>
+      <ScrollArea className="h-[calc(100vh-6rem)] w-full">
+        <nav className="p-4 space-y-2">
+          <NavigationItems />
+        </nav>
 
-      <div className="absolute bottom-4 left-4 right-4">
-        <div className="bg-muted rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">System Status</span>
-            <div className="w-2 h-2 rounded-full status-online animate-pulse-slow" data-testid="system-status-indicator"></div>
-          </div>
-          <div className="space-y-1 text-xs">
-            <div className="flex justify-between">
-              <span>Latency</span>
-              <span className="profit font-mono" data-testid="system-latency">34ms</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Memory</span>
-              <span className="text-foreground font-mono" data-testid="system-memory">2.1GB</span>
-            </div>
-          </div>
+        <div className="p-4 border-t">
+          <Button
+            variant="ghost"
+            onClick={handleLogout}
+            className="w-full justify-start text-muted-foreground hover:text-foreground"
+          >
+            <LogOut className="mr-3 h-4 w-4" />
+            Logout
+          </Button>
         </div>
-      </div>
+      </ScrollArea>
     </aside>
   );
 };

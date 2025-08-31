@@ -8,6 +8,8 @@ import { riskManager } from "./services/risk-manager";
 import { orderManager } from "./services/order-manager";
 import { marketDataService } from "./services/market-data";
 import { Request, Response } from "express";
+import { authService } from "./services/auth";
+import { authenticateToken, requireRole } from "./middleware/auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -41,11 +43,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
 
-  // Dashboard API
-  app.get("/api/dashboard", async (req, res) => {
+  // Authentication routes
+  app.post("/api/auth/register", async (req, res) => {
     try {
-      console.log('Dashboard API called');
-      // Return mock dashboard data for now
+      const { username, email, password, role } = req.body;
+      
+      if (!username || !email || !password) {
+        return res.status(400).json({ error: "Username, email, and password are required" });
+      }
+
+      const user = await authService.register(username, email, password, role);
+      res.json({ message: "User registered successfully", user });
+    } catch (error: any) {
+      if (error.code === "23505") { // Unique constraint violation
+        return res.status(409).json({ error: "Username or email already exists" });
+      }
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Failed to register user" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password are required" });
+      }
+
+      const result = await authService.login(username, password);
+      
+      if (!result) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Failed to login" });
+    }
+  });
+
+  app.post("/api/auth/logout", authenticateToken, async (req, res) => {
+    try {
+      const token = req.headers.authorization?.split(" ")[1];
+      if (token) {
+        await authService.logout(token);
+      }
+      res.json({ message: "Logged out successfully" });
+    } catch (error) {
+      console.error("Logout error:", error);
+      res.status(500).json({ error: "Failed to logout" });
+    }
+  });
+
+  app.get("/api/auth/me", authenticateToken, async (req, res) => {
+    res.json({ user: req.user });
+  });
+
+  // Dashboard API
+  app.get("/api/dashboard", authenticateToken, async (req, res) => {
+    try {
+      console.log('Dashboard API called for user:', req.user?.id);
+      
+      // Get user-specific data
+      const userAccounts = await storage.getAccounts(req.user!.id);
+      const userStrategies = await storage.getStrategies(req.user!.id);
+      const userPositions = await storage.getOpenPositions(undefined, req.user!.id);
+      
+      // Return user-specific dashboard data
       const dashboardData = {
         account: {
           balance: "50000.00",
@@ -126,9 +192,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Strategies API
-  app.get("/api/strategies", async (req, res) => {
+  app.get("/api/strategies", authenticateToken, async (req, res) => {
     try {
-      const strategies = await storage.getStrategies();
+      const strategies = await storage.getStrategies(req.user!.id);
       res.json(strategies);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch strategies" });
@@ -372,6 +438,354 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(backtests);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch backtests" });
+    }
+  });
+
+  // User Settings API
+  app.get("/api/user/settings", authenticateToken, async (req, res) => {
+    try {
+      // Mock user settings data
+      const settings = {
+        profile: {
+          username: req.user?.username || "",
+          email: req.user?.email || "",
+          firstName: "John",
+          lastName: "Doe",
+          timezone: "UTC",
+          language: "en",
+          profilePicture: "/api/user/profile-picture/" + req.user?.id,
+        },
+        preferences: {
+          theme: "dark",
+          currency: "USD",
+          dateFormat: "YYYY-MM-DD",
+          timeFormat: "24h",
+          dashboardRefreshRate: 5,
+          defaultLeverage: 100,
+          riskPercentage: 2,
+        },
+        notifications: {
+          emailAlerts: true,
+          telegramAlerts: false,
+          pushNotifications: true,
+          tradeExecutions: true,
+          riskWarnings: true,
+          systemAlerts: true,
+          marketNews: false,
+        },
+        security: {
+          twoFactorEnabled: false,
+          sessionTimeout: 30,
+          loginAlerts: true,
+          ipWhitelist: [],
+        },
+      };
+      res.json(settings);
+    } catch (error) {
+      console.error('Settings fetch error:', error);
+      res.status(500).json({ error: "Failed to fetch settings" });
+    }
+  });
+
+  app.put("/api/user/settings", authenticateToken, async (req, res) => {
+    try {
+      // In a real implementation, save to database
+      res.json({ message: "Settings updated successfully" });
+    } catch (error) {
+      console.error('Settings update error:', error);
+      res.status(500).json({ error: "Failed to update settings" });
+    }
+  });
+
+  app.put("/api/user/password", authenticateToken, async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      // In a real implementation, verify current password and update
+      res.json({ message: "Password changed successfully" });
+    } catch (error) {
+      console.error('Password change error:', error);
+      res.status(500).json({ error: "Failed to change password" });
+    }
+  });
+
+  app.post("/api/user/profile-picture", authenticateToken, async (req, res) => {
+    try {
+      // In a real implementation, handle file upload
+      const profilePictureUrl = "/api/user/profile-picture/" + req.user?.id + "?t=" + Date.now();
+      res.json({ url: profilePictureUrl });
+    } catch (error) {
+      console.error('Profile picture upload error:', error);
+      res.status(500).json({ error: "Failed to upload profile picture" });
+    }
+  });
+
+  // Account Management API
+  app.get("/api/account/info", authenticateToken, async (req, res) => {
+    try {
+      const accountInfo = {
+        id: req.user?.id,
+        type: "PRO",
+        status: "ACTIVE",
+        createdAt: "2024-01-15T00:00:00Z",
+        lastLogin: new Date().toISOString(),
+        totalTrades: 1247,
+        totalPnL: 15420.75,
+      };
+      res.json(accountInfo);
+    } catch (error) {
+      console.error('Account info error:', error);
+      res.status(500).json({ error: "Failed to fetch account info" });
+    }
+  });
+
+  app.get("/api/account/subscription", authenticateToken, async (req, res) => {
+    try {
+      const subscription = {
+        id: "sub_123",
+        plan: "Professional",
+        status: "ACTIVE",
+        amount: 99.99,
+        currency: "USD",
+        billingCycle: "MONTHLY",
+        nextBilling: "2024-02-01T00:00:00Z",
+        features: [
+          "Unlimited strategies",
+          "Advanced backtesting",
+          "Real-time data",
+          "API access",
+          "Priority support",
+          "Risk management tools"
+        ],
+      };
+      res.json(subscription);
+    } catch (error) {
+      console.error('Subscription error:', error);
+      res.status(500).json({ error: "Failed to fetch subscription" });
+    }
+  });
+
+  app.get("/api/account/invoices", authenticateToken, async (req, res) => {
+    try {
+      const invoices = [
+        {
+          id: "inv_001",
+          number: "INV-2024-001",
+          date: "2024-01-01T00:00:00Z",
+          amount: 99.99,
+          currency: "USD",
+          status: "PAID",
+          downloadUrl: "/api/invoices/inv_001/download",
+        },
+        {
+          id: "inv_002",
+          number: "INV-2023-012",
+          date: "2023-12-01T00:00:00Z",
+          amount: 99.99,
+          currency: "USD",
+          status: "PAID",
+          downloadUrl: "/api/invoices/inv_002/download",
+        },
+      ];
+      res.json(invoices);
+    } catch (error) {
+      console.error('Invoices error:', error);
+      res.status(500).json({ error: "Failed to fetch invoices" });
+    }
+  });
+
+  app.get("/api/account/usage", authenticateToken, async (req, res) => {
+    try {
+      const usage = {
+        apiCalls: {
+          current: 8750,
+          limit: 10000,
+          period: "monthly",
+        },
+        strategiesCount: {
+          current: 8,
+          limit: 25,
+        },
+        backtesters: {
+          current: 2,
+          limit: 5,
+        },
+        storage: {
+          used: 2.1,
+          limit: 10,
+          unit: "GB",
+        },
+      };
+      res.json(usage);
+    } catch (error) {
+      console.error('Usage stats error:', error);
+      res.status(500).json({ error: "Failed to fetch usage stats" });
+    }
+  });
+
+  app.post("/api/account/subscription/cancel", authenticateToken, async (req, res) => {
+    try {
+      // In a real implementation, cancel subscription
+      res.json({ message: "Subscription cancelled successfully" });
+    } catch (error) {
+      console.error('Subscription cancellation error:', error);
+      res.status(500).json({ error: "Failed to cancel subscription" });
+    }
+  });
+
+  app.delete("/api/account", authenticateToken, async (req, res) => {
+    try {
+      // In a real implementation, delete account and all data
+      res.json({ message: "Account deleted successfully" });
+    } catch (error) {
+      console.error('Account deletion error:', error);
+      res.status(500).json({ error: "Failed to delete account" });
+    }
+  });
+
+  app.post("/api/account/export", authenticateToken, async (req, res) => {
+    try {
+      // In a real implementation, generate and return account data export
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', 'attachment; filename="account-data.zip"');
+      res.status(200).send(Buffer.from("Mock account data export"));
+    } catch (error) {
+      console.error('Data export error:', error);
+      res.status(500).json({ error: "Failed to export account data" });
+    }
+  });
+
+  // Support API
+  app.get("/api/support/tickets", authenticateToken, async (req, res) => {
+    try {
+      const tickets = [
+        {
+          id: "ticket_001",
+          subject: "Trading API Connection Issues",
+          description: "Having trouble connecting to the OANDA API. Getting timeout errors.",
+          status: "IN_PROGRESS",
+          priority: "HIGH",
+          category: "technical",
+          createdAt: "2024-01-15T10:00:00Z",
+          updatedAt: "2024-01-16T14:30:00Z",
+          responses: [
+            {
+              id: "resp_001",
+              message: "Thank you for contacting support. We're investigating this issue.",
+              isStaff: true,
+              createdAt: "2024-01-15T11:00:00Z",
+            },
+            {
+              id: "resp_002",
+              message: "Could you please provide your API credentials for testing?",
+              isStaff: true,
+              createdAt: "2024-01-16T14:30:00Z",
+            },
+          ],
+        },
+      ];
+      res.json(tickets);
+    } catch (error) {
+      console.error('Support tickets error:', error);
+      res.status(500).json({ error: "Failed to fetch support tickets" });
+    }
+  });
+
+  app.post("/api/support/tickets", authenticateToken, async (req, res) => {
+    try {
+      const { subject, category, priority, description } = req.body;
+      const ticket = {
+        id: "ticket_" + Date.now(),
+        subject,
+        description,
+        status: "OPEN",
+        priority,
+        category,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        responses: [],
+      };
+      res.json(ticket);
+    } catch (error) {
+      console.error('Ticket creation error:', error);
+      res.status(500).json({ error: "Failed to create support ticket" });
+    }
+  });
+
+  app.get("/api/support/knowledge-base", async (req, res) => {
+    try {
+      const { search, category } = req.query;
+      const articles = [
+        {
+          id: "kb_001",
+          title: "How to connect to a broker",
+          category: "trading",
+          content: "To connect to a broker, navigate to the Brokers page and click 'Add Connection'. Enter your API credentials and test the connection.",
+          tags: ["broker", "connection", "setup"],
+          views: 1205,
+          helpful: 89,
+          lastUpdated: "2024-01-10T00:00:00Z",
+        },
+        {
+          id: "kb_002",
+          title: "Setting up risk management rules",
+          category: "trading",
+          content: "Risk management is crucial for successful trading. Set daily loss limits, position sizes, and maximum drawdown levels in the Risk Management section.",
+          tags: ["risk", "management", "trading"],
+          views: 892,
+          helpful: 76,
+          lastUpdated: "2024-01-08T00:00:00Z",
+        },
+        {
+          id: "kb_003",
+          title: "Creating your first trading strategy",
+          category: "strategies",
+          content: "Learn how to create and deploy your first automated trading strategy using our strategy builder interface.",
+          tags: ["strategy", "automation", "beginner"],
+          views: 2341,
+          helpful: 156,
+          lastUpdated: "2024-01-12T00:00:00Z",
+        },
+        {
+          id: "kb_004",
+          title: "Understanding API rate limits",
+          category: "api",
+          content: "Each plan has different API rate limits. Learn how to optimize your API usage and avoid hitting limits.",
+          tags: ["api", "limits", "optimization"],
+          views: 567,
+          helpful: 42,
+          lastUpdated: "2024-01-09T00:00:00Z",
+        },
+        {
+          id: "kb_005",
+          title: "Billing and subscription management",
+          category: "billing",
+          content: "Learn how to manage your subscription, update payment methods, and understand billing cycles.",
+          tags: ["billing", "subscription", "payment"],
+          views: 345,
+          helpful: 28,
+          lastUpdated: "2024-01-11T00:00:00Z",
+        },
+      ];
+
+      let filteredArticles = articles;
+      
+      if (search) {
+        const searchLower = search.toString().toLowerCase();
+        filteredArticles = filteredArticles.filter(article =>
+          article.title.toLowerCase().includes(searchLower) ||
+          article.content.toLowerCase().includes(searchLower) ||
+          article.tags.some(tag => tag.toLowerCase().includes(searchLower))
+        );
+      }
+      
+      if (category && category !== "all") {
+        filteredArticles = filteredArticles.filter(article => article.category === category);
+      }
+
+      res.json(filteredArticles);
+    } catch (error) {
+      console.error('Knowledge base error:', error);
+      res.status(500).json({ error: "Failed to fetch knowledge base articles" });
     }
   });
 

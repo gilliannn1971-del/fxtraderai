@@ -1,5 +1,6 @@
 interface Account {
   id: string;
+  userId: string; // Added for user association
   name: string;
   balance: string;
   equity: string;
@@ -10,6 +11,7 @@ interface Account {
 
 interface Strategy {
   id: string;
+  userId: string; // Added for user association
   name: string;
   status: string;
   isEnabled: boolean;
@@ -20,14 +22,19 @@ interface Strategy {
 interface Position {
   id: string;
   accountId: string;
+  strategyId?: string; // Optional, if associated with a strategy
   symbol: string;
   side: string;
   quantity: string;
   avgPrice: string;
   currentPrice: string;
   unrealizedPnL: string;
+  realizedPnL?: string; // Added for completeness
+  stopLoss?: string; // Added for completeness
+  takeProfit?: string; // Added for completeness
   isOpen: boolean;
   createdAt: string;
+  closedAt?: string; // Added for completeness
 }
 
 interface Order {
@@ -104,6 +111,7 @@ class MockStorage {
   private accounts: Account[] = [
     {
       id: "acc-1",
+      userId: "user-1", // Added for user association
       name: "FTMO Challenge Account",
       balance: "100000.00",
       equity: "102450.75",
@@ -116,6 +124,7 @@ class MockStorage {
   private strategies: Strategy[] = [
     {
       id: "strat-1",
+      userId: "user-1", // Added for user association
       name: "Breakout Strategy",
       status: "RUNNING",
       isEnabled: true,
@@ -124,6 +133,7 @@ class MockStorage {
     },
     {
       id: "strat-2",
+      userId: "user-1", // Added for user association
       name: "Mean Reversion",
       status: "STOPPED",
       isEnabled: false,
@@ -136,6 +146,7 @@ class MockStorage {
     {
       id: "pos-1",
       accountId: "acc-1",
+      strategyId: "strat-1", // Assuming association
       symbol: "EURUSD",
       side: "BUY",
       quantity: "10000",
@@ -148,6 +159,7 @@ class MockStorage {
     {
       id: "pos-2",
       accountId: "acc-1",
+      strategyId: "strat-1", // Assuming association
       symbol: "GBPUSD",
       side: "SELL",
       quantity: "5000",
@@ -278,13 +290,17 @@ class MockStorage {
   ];
 
   // Account methods
-  async getAccounts(): Promise<Account[]> {
+  async getAccounts(userId?: string): Promise<Account[]> {
+    if (userId) {
+      return this.accounts.filter(account => account.userId === userId);
+    }
     return this.accounts;
   }
 
-  async createAccount(data: any): Promise<Account> {
+  async createAccount(data: any, userId: string): Promise<Account> { // Added userId parameter
     const account: Account = {
       id: `acc-${Date.now()}`,
+      userId: userId, // Assign the provided userId
       name: data.name,
       balance: data.balance || "0",
       equity: data.equity || "0",
@@ -297,13 +313,17 @@ class MockStorage {
   }
 
   // Strategy methods
-  async getStrategies(): Promise<Strategy[]> {
+  async getStrategies(userId?: string): Promise<Strategy[]> {
+    if (userId) {
+      return this.strategies.filter(strategy => strategy.userId === userId);
+    }
     return this.strategies;
   }
 
-  async createStrategy(data: any): Promise<Strategy> {
+  async createStrategy(data: any, userId: string): Promise<Strategy> { // Added userId parameter
     const strategy: Strategy = {
       id: `strat-${Date.now()}`,
+      userId: userId, // Assign the provided userId
       name: data.name,
       status: "STOPPED",
       isEnabled: false,
@@ -324,8 +344,21 @@ class MockStorage {
   }
 
   // Position methods
-  async getOpenPositions(accountId?: string): Promise<Position[]> {
-    return this.positions.filter(p => p.isOpen && (!accountId || p.accountId === accountId));
+  async getOpenPositions(accountId?: string, userId?: string): Promise<Position[]> {
+    let positions = this.positions.filter(p => p.isOpen);
+
+    if (accountId) {
+      positions = positions.filter(p => p.accountId === accountId);
+    }
+
+    if (userId) {
+      // To filter by userId, we need to join with accounts to get the userId
+      const userAccounts = this.accounts.filter(account => account.userId === userId);
+      const userAccountIds = userAccounts.map(account => account.id);
+      positions = positions.filter(p => userAccountIds.includes(p.accountId));
+    }
+
+    return positions;
   }
 
   async getPosition(id: string): Promise<Position | null> {

@@ -97,8 +97,8 @@ export default function Dashboard() {
 
         {/* Middle Row */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
-          <ActiveStrategies strategies={safeData?.strategies} />
-          <OpenPositions positions={safeData?.openPositions} />
+          <ActiveStrategies strategies={safeData?.strategies} openPositions={safeData?.openPositions || []} />
+          <OpenPositions positions={safeData?.openPositions || []} />
         </div>
 
         {/* Bottom Row */}
